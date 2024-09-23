@@ -1,0 +1,47 @@
+{
+	"name": "uvld",
+	"description": "validator",
+	"version": "0.0.1",
+	"type": "module",
+	"source": "./src/index.js",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"browser": "./dist/index.es.js",
+	"unpkg": "./dist/index.min.js",
+	"umd:main": "./dist/index.umd.js",
+	"exports": {
+		"browser": "./dist/index.es.js",
+		"umd": "./dist/index.umd.js",
+		"import": "./dist/index.es.js",
+		"default": "./dist/index.es.js",
+		"require": "./dist/index.js"
+	},
+	"types": "./index.d.ts",
+	"files": [
+		"dist"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/kethan/uvld.git"
+	},
+	"scripts": {
+		"build": "rollup --config rollup.config.js",
+		"test": "vitest"
+	},
+	"devDependencies": {
+		"@rollup/plugin-terser": "^0.4.4",
+		"rollup": "^4.22.4",
+		"rollup-plugin-copy": "^3.5.0",
+		"vitest": "^2.1.1"
+	},
+	"keywords": [],
+	"author": "Kethan Surana",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/kethan/uvld/issues"
+	},
+	"homepage": "https://github.com/kethan/uvld#readme",
+	"dependencies": {
+		"rollup-plugin-bundle-size": "^1.0.3"
+	}
+}

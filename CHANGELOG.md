@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.1.0 (2026-10-25)
+
+Additive: a new `uvld/async` entry point and a fix for a type/runtime mismatch
+in `Context.out`. The synchronous API is unchanged.
+
+### Fixed
+
+- `Context.out` was declared in `src/index.d.ts` but never provided at runtime —
+  a `custom((v, c) => ...)` refinement saw `c.out === undefined`. `parse` and
+  `safeParse` now create a fresh per-evaluation context with a real shared
+  `{ set, value }` box; `seg()` propagates the same reference to every child and
+  a root transform writes into it. This removes the module-level `out` variable,
+  which would have raced under `await`. Cost: +59 raw bytes to the core ESM
+  bundle (4,315 → 4,374 B).
+
+### Added — `uvld/async`
+
+A third, opt-in, tree-shakeable entry point with 21 exports and its own
+await-aware kernel (`src/async.js` / `src/async.d.ts`). It imports the core as
+an external module, so no core code is duplicated.
+
+- **Entry points:** `parseAsync`, `safeParseAsync`, `isAsync`, `evaluateAsync`,
+  all accepting `{ timeout, signal }`. Rejected async validators become
+  `Threw: ...` issues (matching sync `safeParse`); `parseAsync` rejects with
+  `VError`.
+- **Async-aware combinators:** `customAsync`, `objectAsync`, `strictAsync`,
+  `arrayAsync`, `tupleAsync`, `orAsync`, `andAsync`, `optionalAsync`,
+  `nullableAsync`. They accept ordinary sync `uvld` schemas as children.
+  `objectAsync` uses `Promise.all` (key order preserved → deterministic first
+  issue); `orAsync` stays sequential to preserve short-circuit.
+- **Actions:** `checkAsync`, `rawCheckAsync`, `transformAsync`, `pipeAsync`,
+  `fallbackAsync`, `messageAsync`. `pipeAsync` accepts async transforms/checks
+  and the tagged actions from `uvld/utils`.
+- **Helpers:** `resolveAsync` (deep-await promises inside plain objects/arrays;
+  leaves `Date`/`Map`/`Set` alone and survives cycles), `withTimeout`.
+- `./async` export conditions with `types`/`import`/`require`/`default`, a
+  legacy `async.d.ts` node10 shim, `examples/async.mjs`, 24 async tests,
+  size budgets for both async bundles and consumer smoke tests for
+  ESM/CJS/TypeScript across nodenext, bundler and node10.
+
+Caveats documented in the README: `isAsync` is not a type guard; async
+refinements must not be placed in a sync schema's `validations` array; timeouts
+bound the wait but do not cancel in-flight work (use `context.signal`).
+
+Suite: **186 tests** and **10 runnable examples**; `npm audit` 0 vulnerabilities.
+
 ## 1.0.0 (2026-10-25)
 
 Production release. Same tiny idea, but the validation semantics, TypeScript

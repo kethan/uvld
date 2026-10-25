@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 // Never ship leftovers from a previous build shape (e.g. old .es.js/.umd.js).
 rmSync('dist', { recursive: true, force: true });
 
-// Three core bundles + two utils bundles. Both entries are minified; named ESM
+// Three core bundles + two utils bundles + two async bundles. Both entries are minified; named ESM
 // exports are preserved so bundlers can tree-shake. `./index.js` stays external
 // for the utils build, so core code is never duplicated.
 const base = {
@@ -54,4 +54,20 @@ const utils = {
   ]
 };
 
-export default [core, utils];
+const asyncEntry = {
+  input: 'src/async.js',
+  external: ['./index.js'],
+  plugins: [copy('src/async.d.ts', 'dist/async.d.ts')],
+  output: [
+    { file: 'dist/async.js', format: 'es', plugins: [esm] },
+    {
+      file: 'dist/async.cjs',
+      format: 'cjs',
+      exports: 'named',
+      paths: id => id.includes('index.js') ? './index.cjs' : id,
+      plugins: [cjs]
+    }
+  ]
+};
+
+export default [core, utils, asyncEntry];

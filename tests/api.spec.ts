@@ -34,6 +34,22 @@ const declaredUtils = (): string[] => {
   return [...dts.matchAll(/^export const\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]).sort();
 };
 
+const asyncExports = (): string[] => {
+  const block = read('src/async.js').match(/export\s*\{([\s\S]*?)\};/);
+  expect(block).not.toBeNull();
+  return block![1].split(',').map(s => s.trim()).filter(Boolean).sort();
+};
+
+const declaredAsync = (): string[] => {
+  const dts = read('src/async.d.ts');
+  return [...dts.matchAll(/^export function\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]).sort();
+};
+
+const ASYNC_NAMES = (`parseAsync safeParseAsync isAsync evaluateAsync customAsync
+objectAsync strictAsync arrayAsync tupleAsync orAsync andAsync optionalAsync
+nullableAsync checkAsync rawCheckAsync transformAsync pipeAsync fallbackAsync
+messageAsync resolveAsync withTimeout`).trim().split(/\s+/);
+
 // All 128 names from the utils feature list.
 const UTILS_NAMES = (`args base64 bic brand bytes check checkItems codePoints creditCard cuid2 decimal
 description digits domain email emoji empty endsWith entries everyItem examples excludes filterItems
@@ -73,12 +89,13 @@ describe('API surface stays in sync', () => {
 
   test('README documents every core and utils export', () => {
     const readme = read('README.md');
-    const missing = [...runtimeExports(), ...UTILS_NAMES, ...PROD_ADDITIONS]
+    const missing = [...runtimeExports(), ...UTILS_NAMES, ...PROD_ADDITIONS, ...ASYNC_NAMES]
       .filter(name => !new RegExp(`\\b${name}\\b`).test(readme));
     expect(missing).toEqual([]);
     expect(readme).toMatch(/## Quickstart/i);
     expect(readme).toMatch(/## Use cases/i);
     expect(readme).toMatch(/uvld\/utils/);
+    expect(readme).toMatch(/uvld\/async/);
   });
 
   test('utils entry point: runtime exports match declarations and the feature list', () => {
@@ -89,6 +106,36 @@ describe('API surface stays in sync', () => {
     expect([...UTILS_NAMES, ...PROD_ADDITIONS].filter(n => !runtime.includes(n))).toEqual([]);
     expect(declaredUtils()).toEqual(runtime);
     expect(runtime).toContain('pipe');
+  });
+
+  test('async entry point: runtime exports match declarations', () => {
+    expect(ASYNC_NAMES).toHaveLength(21);
+    expect(asyncExports()).toHaveLength(21);
+    expect(ASYNC_NAMES.filter(n => !asyncExports().includes(n))).toEqual([]);
+    expect(declaredAsync()).toEqual(asyncExports());
+  });
+
+  test('async and utils entries keep the core external', () => {
+    expect(read('src/async.js')).toContain("from './index.js'");
+    expect(read('src/utils.js')).toContain("from './index.js'");
+  });
+
+  test('the ./async subpath is fully declared', () => {
+    const p = JSON.parse(read('package.json'));
+    const sub = p.exports['./async'];
+    expect(Object.keys(sub)[0]).toBe('types');
+    expect(sub.types).toBe('./dist/async.d.ts');
+    expect(sub.import).toBe('./dist/async.js');
+    expect(sub.require).toMatch(/\.cjs$/);
+    expect(Object.keys(sub).indexOf('require')).toBeLessThan(Object.keys(sub).indexOf('default'));
+    expect(p.files).toContain('async.d.ts');
+    expect(read('async.d.ts')).toContain('./dist/async.js');
+  });
+
+  test('Context.out is declared and implemented in the core', () => {
+    expect(read('src/index.d.ts')).toMatch(/out:\s*\{\s*set:\s*boolean/);
+    expect(read('src/index.js')).toContain('c.out.set = true');
+    expect(read('src/index.js')).not.toContain('let out;');
   });
 
   test('utils does not import a bundled copy of the core', () => {
@@ -140,7 +187,7 @@ describe('package manifest', () => {
     expect(p.sideEffects).toBe(false);
     expect(p.files).toContain('dist');
     expect(p.engines.node).toBeTruthy();
-    expect(p.version).toBe('1.0.0');
+    expect(p.version).toBe('1.1.0');
     expect(p.keywords.length).toBeGreaterThan(3);
   });
 

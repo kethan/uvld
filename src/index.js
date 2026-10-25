@@ -6,8 +6,10 @@
 // Context carries the path, value origin, depth guard and (implicitly) the
 // transformed output.
 
-const ROOT = { path: '', origin: 'value', depth: 0 };
-let out; // root transform result, saved/restored by evaluate()
+// `out` is a shared mutable box (not module-level state), so a root transform
+// can publish its result without racing an await. `seg()` spreads `c`, so
+// every child sees the very same box. evaluate() copies it per call.
+const ROOT = { path: '', origin: 'value', depth: 0, out: { set: false, value: undefined } };
 
 // Precise, cross-realm type names: null, array, date, map, set, promise, ...
 const typeOf = v => v === null ? 'null'
@@ -182,7 +184,7 @@ const lazy = resolve => {
 // Nested transforms affect validation only (documented in the README).
 const transform = (schema, fn) => (value, c = ROOT) => {
   const next = fn(value);
-  if (!c.path) out = { v: next };
+  if (!c.path) { c.out.set = true; c.out.value = next; }
   return call(schema, next, c);
 };
 
@@ -198,15 +200,12 @@ class VError extends Error {
 // Single evaluation path for is/parse/safeParse. Unexpected throws from user
 // validators become an issue, so `safeParse` is genuinely safe.
 const evaluate = (schema, value) => {
-  const previous = out;
-  out = undefined;
+  const ctx = { ...ROOT, out: { set: false, value: undefined } };
   try {
-    const issues = call(schema, value, ROOT);
-    return { issues, data: out ? out.v : value };
+    const issues = call(schema, value, ctx);
+    return { issues, data: ctx.out.set ? ctx.out.value : value };
   } catch (error) {
-    return { issues: [issue(`Threw: ${error?.message || error}`, 'validator', value, ROOT)], data: value };
-  } finally {
-    out = previous;
+    return { issues: [issue(`Threw: ${error?.message || error}`, 'validator', value, ctx)], data: value };
   }
 };
 

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
-for (const f of ['dist/index.js', 'dist/index.cjs', 'dist/index.min.js', 'dist/index.d.ts', 'dist/utils.js', 'dist/utils.cjs', 'dist/utils.d.ts']) {
+for (const f of ['dist/index.js', 'dist/index.cjs', 'dist/index.min.js', 'dist/index.d.ts', 'dist/utils.js', 'dist/utils.cjs', 'dist/utils.d.ts', 'dist/async.js', 'dist/async.cjs', 'dist/async.d.ts']) {
   if (!existsSync(join(repo, f))) {
     console.error(`MISSING ${f} — run \`npm run build\` first.`);
     process.exit(1);
@@ -79,6 +79,52 @@ const flat: Record<string, string[]> = flatten([]);
 void [format, action, minLength, s, withDefault, flat];
 `);
 
+  writeFileSync(join(consumer, 'async.mjs'), `
+import { string } from 'uvld';
+import { objectAsync, checkAsync, safeParseAsync, parseAsync, pipeAsync, transformAsync, fallbackAsync, resolveAsync } from 'uvld/async';
+const S = objectAsync({ name: string() }, '', [checkAsync(async v => v.name.length > 2, 'short')]);
+const ok = await safeParseAsync(S, { name: 'Ada' });
+if (!ok.success) throw new Error('async ESM failed');
+const bad = await safeParseAsync(S, { name: 'A' });
+if (bad.success || bad.error.issues[0].message !== 'short') throw new Error('async check failed');
+const P = pipeAsync(string(), transformAsync(async v => v.toUpperCase()));
+if (await parseAsync(P, 'hi') !== 'HI') throw new Error('async pipe failed');
+if (await parseAsync(fallbackAsync(string(), 'guest'), 1) !== 'guest') throw new Error('async fallback failed');
+const d = await resolveAsync({ a: Promise.resolve(1) });
+if (d.a !== 1) throw new Error('resolveAsync failed');
+console.log('async ESM import: OK');
+`);
+
+  writeFileSync(join(consumer, 'async.cjs'), `
+const a = require('uvld/async');
+const core = require('uvld');
+(async () => {
+  const r = await a.safeParseAsync(a.objectAsync({ x: core.string() }), { x: 'y' });
+  if (!r.success) throw new Error('async CJS failed');
+  if (!require.resolve('uvld/async').endsWith('async.cjs')) throw new Error('async require resolved to the wrong file');
+  console.log('async CJS require: OK');
+})().catch(e => { console.error(e); process.exitCode = 1; });
+`);
+
+  writeFileSync(join(consumer, 'async-types.ts'), `
+import { string } from 'uvld';
+import {
+  objectAsync, checkAsync, safeParseAsync, parseAsync, pipeAsync,
+  transformAsync, resolveAsync, type AsyncContext, type AsyncOptions
+} from 'uvld/async';
+const ctxCheck = checkAsync(async (v: any, c?: AsyncContext) => { void c?.signal; return true; });
+const S = objectAsync({ name: string() }, '', [ctxCheck]);
+const opts: AsyncOptions = { timeout: 100 };
+async function main() {
+  const r = await safeParseAsync(S, { name: 'Ada' }, opts);
+  if (r.success) { const s: unknown = r.data; void s; }
+  const v: string = await parseAsync<string>(pipeAsync(string(), transformAsync(async (x: string) => x.trim())), ' x ');
+  const d: { a: number } = await resolveAsync({ a: Promise.resolve(1) });
+  void [v, d];
+}
+void main;
+`);
+
   writeFileSync(join(consumer, 'types.ts'), `
 import { string, number, object, array, optional, parse, safeParse, is, Infer, VError, Issue } from 'uvld';
 const User = object({ name: string(), age: number(), tags: array(string()), bio: optional(string()) });
@@ -98,6 +144,8 @@ void e.issues;
   console.log(run('node', ['cjs.cjs'], consumer).trim());
   console.log(run('node', ['utils.mjs'], consumer).trim());
   console.log(run('node', ['utils.cjs'], consumer).trim());
+  console.log(run('node', ['async.mjs'], consumer).trim());
+  console.log(run('node', ['async.cjs'], consumer).trim());
   const tsc = join(repo, 'node_modules', '.bin', 'tsc');
   for (const [label, args] of [
     ['node16/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'types.ts']],
@@ -108,6 +156,9 @@ void e.issues;
     console.log(`TypeScript (${label}): OK`);
   }
   for (const [label, args] of [
+    ['async/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'async-types.ts']],
+    ['async/bundler', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'esnext', '--moduleResolution', 'bundler', 'async-types.ts']],
+    ['async/node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'async-types.ts']],
     ['utils/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'utils-types.ts']],
     ['utils/bundler', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'esnext', '--moduleResolution', 'bundler', 'utils-types.ts']],
     ['utils/node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'utils-types.ts']]
@@ -130,7 +181,8 @@ void e.issues;
     pkg.types, pkg.main, pkg.module, pkg.browser, pkg.unpkg,
     ...Object.values(pkg.exports['.']),
     ...Object.values(pkg.exports['./utils']),
-    './utils.d.ts'
+    ...Object.values(pkg.exports['./async']),
+    './utils.d.ts', './async.d.ts'
   ];
   for (const target of targets) {
     if (typeof target === 'string' && target.startsWith('./') &&

@@ -1,14 +1,18 @@
 // Enforced byte budget. Fails CI if a change makes the library bigger.
 // Baseline (0.0.1, unminified ESM): 6422 raw / 1678 gzip / 1504 brotli.
-// 1.0.0 ships minified builds: raw bytes are ~33% lower; compressed bytes
-// are budgeted below so future changes cannot silently bloat the bundle.
+// The core budget is deliberately tight: importing `uvld/utils` must never
+// add a single byte to the core bundle.
 import { readFileSync, existsSync } from 'node:fs';
 import { gzipSync, brotliCompressSync } from 'node:zlib';
 
 const BUDGET = {
-  'dist/index.js': { raw: 4500, gzip: 1950, brotli: 1800 },
+  // core (unchanged by the utils entry point)
+  'dist/index.js': { raw: 4350, gzip: 1900, brotli: 1765 },
   'dist/index.cjs': { raw: 4600, gzip: 1900, brotli: 1750 },
-  'dist/index.min.js': { raw: 4400, gzip: 1900, brotli: 1750 }
+  'dist/index.min.js': { raw: 4400, gzip: 1900, brotli: 1750 },
+  // optional utils entry point
+  'dist/utils.js': { raw: 11600, gzip: 4500, brotli: 4100 },
+  'dist/utils.cjs': { raw: 11900, gzip: 4400, brotli: 4000 }
 };
 
 let failed = false;
@@ -34,4 +38,6 @@ for (const [file, limit] of Object.entries(BUDGET)) {
 }
 console.log('\nbaseline 0.0.1 ESM (unminified): raw 6422 / gzip 1678 / brotli 1504');
 console.log('runtime dependencies:', JSON.parse(readFileSync('package.json', 'utf8')).dependencies ?? 0);
+console.log('core ESM is byte-identical with or without uvld/utils:',
+  readFileSync('dist/utils.js', 'utf8').includes('from"./index.js"') ? 'yes (external import)' : 'check build');
 if (failed) process.exit(1);

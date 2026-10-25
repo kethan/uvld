@@ -4,7 +4,7 @@
 
 **uvld** validates unknown data in JavaScript and TypeScript: one small function per type, composed into schemas, with structured errors and static type inference.
 
-- **Zero runtime dependencies.** 38 named exports, ~4.3 kB minified / ~1.9 kB gzip.
+- **Zero runtime dependencies.** 38 core exports (~4.3 kB minified / ~1.9 kB gzip) plus **129 opt-in utilities** in `uvld/utils`, which never add a byte to the core.
 - **Correct by default.** Finite numbers, own properties, symbol keys, safe unions, exception-safe parsing.
 - **TypeScript-first.** `Infer<typeof schema>`, a real `is()` type guard, declarations shipped with the package.
 - **Uniform API.** Every validator factory takes `(message?, validations?)`.
@@ -226,6 +226,7 @@ Runnable, assert-based examples live in [`examples/`](examples/). Run them all w
 | [`errors.mjs`](examples/errors.mjs) | issue shape, `VError`, trapped validator exceptions |
 | [`transform.mjs`](examples/transform.mjs) | trimming/coercion with `transform` |
 | [`records.mjs`](examples/records.mjs) | records, symbol keys, `Map`, `Set`, nested arrays |
+| [`utils.mjs`](examples/utils.mjs) | `uvld/utils`: format checks, constraints, transforms, `pipe` |
 | [`typescript.ts`](examples/typescript.ts) | static inference (compile-only) |
 
 A few compact recipes:
@@ -246,6 +247,116 @@ const Body = strict({ token: string(), amount: number() });
 
 ---
 
+## Utilities — `uvld/utils`
+
+The core stays tiny. All of the extra validators, constraints, transforms and
+helpers live in a **separate, opt-in entry point**, so importing them never adds
+a byte to the core `uvld` bundle. Use `uvld/utils` when you need them; a bundler
+tree-shakes everything you do not import.
+
+```bash
+npm i uvld
+```
+
+```js
+import { string, number, object, safeParse, parse } from 'uvld';
+import { email, minLength, uuid, ipv4, trim, pipe, toLowerCase } from 'uvld/utils';
+
+// Checks drop straight into a core `validations` array …
+const Email = string('Expected text', [email('Invalid email'), minLength(6)]);
+safeParse(Email, 'ada@example.com'); // { success: true, data: 'ada@example.com' }
+
+// … and also work standalone.
+uuid()('550e8400-e29b-41d4-a716-446655440000'); // true
+
+// `pipe` composes transform actions + checks and returns transformed data.
+const CleanEmail = pipe(string(), trim(), toLowerCase(), email());
+parse(CleanEmail, '  ADA@Example.COM  '); // 'ada@example.com'
+```
+
+### Two kinds of utility
+
+- **Checks** — `check(value) => true | message`. Usable standalone, inside a
+  core `validations` array, or in `pipe`. Formats (`email`, `uuid`, `ipv4`,
+  `creditCard`, `isoTimestamp`, …), constraints (`minLength`, `maxBytes`,
+  `minValue`, `multipleOf`, …) and generic helpers (`check`, `rawCheck`,
+  `guard`, `regex`, `includes`, `everyItem`, …) are checks.
+- **Transform actions** — `action(value) => newValue`, tagged for `pipe`.
+  `trim`, `toLowerCase`, `toCamelCase`, `toNumber`, `parseJson`, `mapItems`,
+  `rawTransform`, … are transform actions. Use them with `pipe(schema, ...)`
+  or with core `transform(schema, action)`, not as standalone schemas.
+
+`pipe(schema, ...actions)` applies transforms once, validates the result
+against `schema`, runs the checks, and (at the root of `parse`/`safeParse`)
+returns the transformed data. Nested pipes validate but do not rewrite the
+parent object — normalise fields before calling `parse` if you need that.
+
+### Complete utility list
+
+<details>
+<summary>All 128 requested names (plus <code>pipe</code>)</summary>
+
+```text
+  args base64 bic brand bytes check checkItems codePoints
+  creditCard cuid2 decimal description digits domain email emoji
+  empty endsWith entries everyItem examples excludes filterItems findItem
+  finite flavor graphemes gtValue guard hash hexColor hexadecimal
+  imei includes integer ip ipv4 ipv6 isbn isoDate
+  isoDateTime isoDateTimeSecond isoTime isoTimeSecond isoTimestamp isoWeek isrc jwsCompact
+  ksuid length ltValue mac mac48 mac64 mapItems maxBytes
+  maxCodePoints maxEntries maxGraphemes maxLength maxSize maxValue maxWords metadata
+  mimeType minBytes minCodePoints minEntries minGraphemes minLength minSize minValue
+  minWords multipleOf nanoid nonEmpty normalize notBytes notCodePoints notEntries
+  notGraphemes notLength notSize notValue notValues notWords octal parseBoolean
+  parseJson partialCheck rawCheck rawTransform readonly reduceItems regex returns
+  rfcEmail safeInteger size slug someItem sortItems startsWith stringifyJson
+  title toBigint toBoolean toCamelCase toDate toKebabCase toLowerCase toMaxValue
+  toMinValue toNumber toPascalCase toSnakeCase toString toUpperCase transform trim
+  trimEnd trimStart ulid url uuid value values words
+  pipe
+```
+
+</details>
+
+Grouped by purpose:
+
+- **Formats / identifiers:** `base64`, `bic`, `creditCard`, `cuid2`, `decimal`,
+  `digits`, `domain`, `email`, `rfcEmail`, `emoji`, `hexadecimal`, `hexColor`,
+  `imei`, `ip`, `ipv4`, `ipv6`, `isbn`, `isrc`, `isoDate`, `isoDateTime`,
+  `isoDateTimeSecond`, `isoTime`, `isoTimeSecond`, `isoTimestamp`, `isoWeek`,
+  `jwsCompact`, `ksuid`, `mac`, `mac48`, `mac64`, `mimeType`, `nanoid`,
+  `octal`, `slug`, `ulid`, `url`, `uuid`, `hash`.
+- **Size / count / value constraints:** `length`, `minLength`, `maxLength`,
+  `notLength`, `bytes`, `minBytes`, `maxBytes`, `notBytes`, `codePoints`,
+  `minCodePoints`, `maxCodePoints`, `notCodePoints`, `graphemes`,
+  `minGraphemes`, `maxGraphemes`, `notGraphemes`, `words`, `minWords`,
+  `maxWords`, `notWords`, `size`, `minSize`, `maxSize`, `notSize`, `entries`,
+  `minEntries`, `maxEntries`, `notEntries`, `minValue`, `maxValue`, `gtValue`,
+  `ltValue`, `value`, `notValue`, `notValues`, `values`, `multipleOf`.
+- **Number / emptiness / membership:** `finite`, `integer`, `safeInteger`,
+  `empty`, `nonEmpty`, `includes`, `excludes`, `startsWith`, `endsWith`,
+  `regex`, `check`, `rawCheck`, `partialCheck`, `guard`, `everyItem`,
+  `someItem`, `checkItems`.
+- **Transforms:** `trim`, `trimStart`, `trimEnd`, `toLowerCase`, `toUpperCase`,
+  `toCamelCase`, `toPascalCase`, `toKebabCase`, `toSnakeCase`, `normalize`,
+  `toNumber`, `toBoolean`, `parseBoolean`, `toBigint`, `toDate`, `toString`,
+  `toMinValue`, `toMaxValue`, `parseJson`, `stringifyJson`, `mapItems`,
+  `filterItems`, `sortItems`, `reduceItems`, `findItem`, `rawTransform`,
+  `transform` (re-export of core `transform`).
+- **Composition / metadata:** `pipe`, `args`, `returns`, `readonly`, `title`,
+  `description`, `metadata`, `examples`, `brand`, `flavor`.
+
+Notes: `hash(algorithm)` checks hex digests for md5/sha1/sha256/sha384/sha512;
+`nanoid(size)` defaults to 21; `creditCard`, `imei` and `isbn` verify checksums;
+`graphemes` uses `Intl.Segmenter` when available; `bytes` uses UTF-8.
+`title`/`description`/`metadata`/`examples`/`brand`/`flavor` decorate a schema
+(`title(schema, 'Name')`) or act as metadata inside `pipe`.
+
+See [`examples/utils.mjs`](examples/utils.mjs) and
+[`tests/utils.spec.ts`](tests/utils.spec.ts) (84 tests) for runnable coverage.
+
+---
+
 ## Browser / CDN
 
 ```html
@@ -256,7 +367,7 @@ const Body = strict({ token: string(), amount: number() });
 </script>
 ```
 
-Or use an ESM CDN: `https://esm.sh/uvld`. CommonJS works too: `const { string } = require('uvld');`.
+Or use an ESM CDN: `https://esm.sh/uvld`. CommonJS works too: `const { string } = require('uvld');`. The `uvld/utils` entry point ships as ESM + CJS (no IIFE build) and works with `node16`/`nodenext`, `bundler` and legacy `node10` TypeScript resolution.
 
 ---
 
@@ -269,6 +380,13 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 | `dist/index.js` (ESM) | 4,315 B | 1,895 B | 1,756 B |
 | `dist/index.cjs` (CJS) | 4,422 B | 1,830 B | 1,687 B |
 | `dist/index.min.js` (IIFE) | 4,229 B | 1,818 B | 1,677 B |
+| `dist/utils.js` (ESM, opt-in) | 10,896 B | 4,225 B | 3,819 B |
+| `dist/utils.cjs` (CJS, opt-in) | 11,247 B | 4,121 B | 3,724 B |
+
+`uvld/utils` is a **separate entry point**: `dist/utils.js` imports the core as
+an external module (never duplicates it), so the core bundle above is
+byte-identical whether or not you use utilities. Bundlers tree-shake the named
+ESM exports, so you only pay for what you import.
 
 - Raw ESM bytes are **33% lower** than 0.0.1 (6,422 B unminified); there are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs), and the published tarball is smaller.
 - Compressed full-bundle size is slightly larger than the 0.0.1 minified CDN build (~1.27 kB gzip) because 1.0.0 fixes ~20 correctness defects, adds symbol-key/own-property handling, context propagation, exception safety and path encoding. The budget above stops it growing further.
@@ -300,9 +418,9 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 ```bash
 npm ci
-npm test             # vitest run (56 tests)
+npm test             # vitest run (143 tests)
 npm run typecheck    # tsc --noEmit over source types, tests and examples
-npm run examples     # run all 8 runnable examples
+npm run examples     # run all 9 runnable examples
 npm run build        # ESM + CJS + IIFE bundles and dist/index.d.ts
 npm run size         # enforce the byte budget
 npm run smoke        # pack + install into a clean consumer; ESM/CJS/TS/IIFE checks

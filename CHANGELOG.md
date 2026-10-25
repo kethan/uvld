@@ -46,6 +46,41 @@ surface and package layout are now reliable. **Breaking changes vs 0.0.1.**
 
 ### Changed / added
 
+
+### Added — `uvld/utils` (opt-in entry point)
+
+129 exports in a separate, tree-shakeable `uvld/utils` entry point. The core
+bundle is **byte-identical** (4,315 B) — `dist/utils.js` imports the core as an
+external module instead of bundling it.
+
+- **Formats (40+):** `base64`, `bic`, `creditCard` (Luhn), `cuid2`, `decimal`,
+  `digits`, `domain`, `email`, `rfcEmail`, `emoji`, `hexadecimal`, `hexColor`,
+  `imei` (Luhn), `ip`, `ipv4`, `ipv6`, `isbn` (checksum), `isrc`, `isoDate`,
+  `isoDateTime`, `isoDateTimeSecond`, `isoTime`, `isoTimeSecond`,
+  `isoTimestamp`, `isoWeek`, `jwsCompact`, `ksuid`, `mac`, `mac48`, `mac64`,
+  `mimeType`, `nanoid`, `octal`, `slug`, `ulid`, `url`, `uuid`, `hash`.
+- **Constraints (40+):** exact/min/max/not for `length`, `bytes`,
+  `codePoints`, `graphemes` (`Intl.Segmenter`), `words`, `size`, `entries`,
+  plus `minValue`, `maxValue`, `gtValue`, `ltValue`, `value`, `notValue`,
+  `notValues`, `values`, `multipleOf`, `finite`, `integer`, `safeInteger`,
+  `empty`, `nonEmpty`.
+- **Membership & items:** `includes`, `excludes`, `startsWith`, `endsWith`,
+  `regex`, `check`, `rawCheck`, `partialCheck`, `guard`, `everyItem`,
+  `someItem`, `checkItems`, `mapItems`, `filterItems`, `sortItems`,
+  `reduceItems`, `findItem`.
+- **Transforms:** `trim`, `trimStart`, `trimEnd`, `toLowerCase`, `toUpperCase`,
+  `toCamelCase`, `toPascalCase`, `toKebabCase`, `toSnakeCase`, `normalize`,
+  `toNumber`, `toBoolean`, `parseBoolean`, `toBigint`, `toDate`, `toString`,
+  `toMinValue`, `toMaxValue`, `parseJson`, `stringifyJson`, `rawTransform`,
+  `transform` (core re-export).
+- **Composition & metadata:** `pipe` (transforms + checks in one schema, with
+  transformed data at the root), `args`, `returns`, `readonly`, `title`,
+  `description`, `metadata`, `examples`, `brand`, `flavor`.
+- Declarations (`dist/utils.d.ts`), a legacy `utils.d.ts` node10 shim,
+  `./utils` export conditions, `examples/utils.mjs`, 84 utility tests,
+  size budgets for both utils bundles, and consumer smoke tests for
+  ESM/CJS/TypeScript (all three resolution modes).
+
 - **Uniform signature for every validator factory:**
   `factory(..., message?: string, validations?: Validator[])`.
 - Zero runtime dependencies (the build-size plugin moved to dev tooling).
@@ -53,8 +88,8 @@ surface and package layout are now reliable. **Breaking changes vs 0.0.1.**
 - `npm run typecheck`, `size`, `smoke`, `examples`, `check`; enforced byte
   budget; consumer smoke test for ESM/CJS/TypeScript across three resolution
   modes; CI on Node 20/22 with a dependency audit.
-- 8 runnable, assert-based examples and a 56-test suite covering every
-  regression above.
+- 9 runnable, assert-based examples and a 143-test suite covering every
+  regression above and every utility.
 - `LICENSE` (ISC) added; README now matches `package.json`. Node >= 20.
 
 ### Migration notes

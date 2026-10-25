@@ -1,8 +1,9 @@
 # Contributing
 
-Thanks for helping out. The whole library is one file: [`src/index.js`](src/index.js). Its
-public types live in [`src/index.d.ts`](src/index.d.ts) and are kept in sync by
-[`tests/api.spec.ts`](tests/api.spec.ts).
+Thanks for helping out. The core is one file: [`src/index.js`](src/index.js), with public
+types in [`src/index.d.ts`](src/index.d.ts). Optional utilities live in
+[`src/utils.js`](src/utils.js) / [`src/utils.d.ts`](src/utils.d.ts) and are built as a
+separate entry point. Both surfaces are kept in sync by [`tests/api.spec.ts`](tests/api.spec.ts).
 
 ## Setup
 
@@ -18,7 +19,9 @@ Use `npm run test:watch` while developing.
 1. **Every behavioural change needs a test.** Prefer a regression test that fails
    on the old behaviour (see `index.spec.ts` for the 1.0.0 regressions).
 2. **Keep the API surface in sync.** Adding/removing an export means updating
-   `src/index.js`, `src/index.d.ts`, `README.md` and the smoke-test export count.
+   `src/index.js` / `src/utils.js`, the matching `.d.ts`, `README.md` and the
+   smoke-test export counts. Utilities must not add bytes to the core bundle —
+   `npm run size` enforces this.
 3. **Respect the byte budget.** `npm run size` fails if a bundle grows past its
    limit. Prefer reusing helpers over adding new code paths.
 4. **Uniform signatures.** New validator factories must accept

@@ -17,11 +17,18 @@
       "require": "./dist/index.cjs",
       "default": "./dist/index.js"
     },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "import": "./dist/utils.js",
+      "require": "./dist/utils.cjs",
+      "default": "./dist/utils.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "LICENSE"
+    "LICENSE",
+    "utils.d.ts"
   ],
   "sideEffects": false,
   "engines": {

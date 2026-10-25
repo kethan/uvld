@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
-for (const f of ['dist/index.js', 'dist/index.cjs', 'dist/index.min.js', 'dist/index.d.ts']) {
+for (const f of ['dist/index.js', 'dist/index.cjs', 'dist/index.min.js', 'dist/index.d.ts', 'dist/utils.js', 'dist/utils.cjs', 'dist/utils.d.ts']) {
   if (!existsSync(join(repo, f))) {
     console.error(`MISSING ${f} — run \`npm run build\` first.`);
     process.exit(1);
@@ -45,6 +45,34 @@ if (!require.resolve('uvld').endsWith('index.cjs')) throw new Error('require res
 console.log('CJS require: OK (' + require.resolve('uvld') + ')');
 `);
 
+  writeFileSync(join(consumer, 'utils.mjs'), `
+import { email, minLength, pipe, trim, ipv4 } from 'uvld/utils';
+import { string, parse, safeParse } from 'uvld';
+if (!safeParse(string('', [email(), minLength(5)]), 'ada@example.com').success) throw new Error('utils check failed');
+if (parse(pipe(string(), trim()), '  hi  ') !== 'hi') throw new Error('utils pipe failed');
+if (ipv4()('1.2.3.4') !== true) throw new Error('ipv4 failed');
+console.log('utils ESM import: OK');
+`);
+
+  writeFileSync(join(consumer, 'utils.cjs'), `
+const u = require('uvld/utils');
+const core = require('uvld');
+if (u.email()('a@b.com') !== true) throw new Error('utils CJS failed');
+if (!core.safeParse(core.string(), 'ok').success) throw new Error('core CJS failed');
+if (!require.resolve('uvld/utils').endsWith('utils.cjs')) throw new Error('utils require resolved to the wrong file');
+console.log('utils CJS require: OK');
+`);
+
+  writeFileSync(join(consumer, 'utils-types.ts'), `
+import { email, pipe, trim, minLength, type Check, type TransformAction } from 'uvld/utils';
+import { string, parse } from 'uvld';
+const format: Check = email();
+const action: TransformAction = trim();
+const result = parse(pipe(string(), trim(), email()), ' a@b.com ');
+const s: string = result;
+void [format, action, minLength, s];
+`);
+
   writeFileSync(join(consumer, 'types.ts'), `
 import { string, number, object, array, optional, parse, safeParse, is, Infer, VError, Issue } from 'uvld';
 const User = object({ name: string(), age: number(), tags: array(string()), bio: optional(string()) });
@@ -62,11 +90,21 @@ void e.issues;
 
   console.log(run('node', ['esm.mjs'], consumer).trim());
   console.log(run('node', ['cjs.cjs'], consumer).trim());
+  console.log(run('node', ['utils.mjs'], consumer).trim());
+  console.log(run('node', ['utils.cjs'], consumer).trim());
   const tsc = join(repo, 'node_modules', '.bin', 'tsc');
   for (const [label, args] of [
     ['node16/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'types.ts']],
     ['bundler', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'esnext', '--moduleResolution', 'bundler', 'types.ts']],
     ['node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'types.ts']]
+  ]) {
+    run(tsc, args, consumer);
+    console.log(`TypeScript (${label}): OK`);
+  }
+  for (const [label, args] of [
+    ['utils/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'utils-types.ts']],
+    ['utils/bundler', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'esnext', '--moduleResolution', 'bundler', 'utils-types.ts']],
+    ['utils/node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'utils-types.ts']]
   ]) {
     run(tsc, args, consumer);
     console.log(`TypeScript (${label}): OK`);
@@ -84,7 +122,9 @@ void e.issues;
   const pkg = JSON.parse(readFileSync(join(consumer, 'node_modules/uvld/package.json'), 'utf8'));
   const targets = [
     pkg.types, pkg.main, pkg.module, pkg.browser, pkg.unpkg,
-    ...Object.values(pkg.exports['.'])
+    ...Object.values(pkg.exports['.']),
+    ...Object.values(pkg.exports['./utils']),
+    './utils.d.ts'
   ];
   for (const target of targets) {
     if (typeof target === 'string' && target.startsWith('./') &&

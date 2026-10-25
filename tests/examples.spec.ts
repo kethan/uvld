@@ -12,5 +12,5 @@ test('all runnable examples execute without errors', () => {
   expect(output).toContain('=== quickstart ===');
   expect(output).toContain('=== api ===');
   expect(output).toContain('=== errors ===');
-  expect(output).toContain('8 examples ran successfully.');
+  expect(output).toContain('9 examples ran successfully.');
 });

@@ -8,6 +8,7 @@ import { run as recursive } from './recursive.mjs';
 import { run as errors } from './errors.mjs';
 import { run as transform } from './transform.mjs';
 import { run as records } from './records.mjs';
+import { run as utils } from './utils.mjs';
 
 const examples = [
   ['quickstart', quickstart],
@@ -17,7 +18,8 @@ const examples = [
   ['recursive', recursive],
   ['errors', errors],
   ['transform', transform],
-  ['records', records]
+  ['records', records],
+  ['utils', utils]
 ];
 
 for (const [name, run] of examples) {

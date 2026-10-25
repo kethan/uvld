@@ -49,7 +49,7 @@ surface and package layout are now reliable. **Breaking changes vs 0.0.1.**
 
 ### Added — `uvld/utils` (opt-in entry point)
 
-129 exports in a separate, tree-shakeable `uvld/utils` entry point. The core
+158 exports in a separate, tree-shakeable `uvld/utils` entry point. The core
 bundle is **byte-identical** (4,315 B) — `dist/utils.js` imports the core as an
 external module instead of bundling it.
 
@@ -76,8 +76,17 @@ external module instead of bundling it.
 - **Composition & metadata:** `pipe` (transforms + checks in one schema, with
   transformed data at the root), `args`, `returns`, `readonly`, `title`,
   `description`, `metadata`, `examples`, `brand`, `flavor`.
+- **Production gap review — 29 more helpers:** `fallback` (default value on
+  failure), `message` (override issue text, keeps nested paths), `flatten`
+  (`{ path: messages[] }` map from an `Issue[]` or `VError`), `nonNullable`,
+  `nonOptional`, `nonNullish`; formats `alpha`, `alphaNumeric`, `lowercase`,
+  `uppercase`, `ascii`, `semver`, `json`; numeric/date constraints `positive`,
+  `negative`, `nonNegative`, `nonPositive`, `inRange`, `minDate`, `maxDate`;
+  collections `uniqueItems`, `toUnique`, `compactItems`, `reverseItems`;
+  string transforms `toTitleCase`, `truncate`, `padStart`, `padEnd`, `replace`.
+  All are opt-in and the core bundle remains byte-identical.
 - Declarations (`dist/utils.d.ts`), a legacy `utils.d.ts` node10 shim,
-  `./utils` export conditions, `examples/utils.mjs`, 84 utility tests,
+  `./utils` export conditions, `examples/utils.mjs`, 99 utility tests,
   size budgets for both utils bundles, and consumer smoke tests for
   ESM/CJS/TypeScript (all three resolution modes).
 
@@ -88,7 +97,7 @@ external module instead of bundling it.
 - `npm run typecheck`, `size`, `smoke`, `examples`, `check`; enforced byte
   budget; consumer smoke test for ESM/CJS/TypeScript across three resolution
   modes; CI on Node 20/22 with a dependency audit.
-- 9 runnable, assert-based examples and a 143-test suite covering every
+- 9 runnable, assert-based examples and a 158-test suite covering every
   regression above and every utility.
 - `LICENSE` (ISC) added; README now matches `package.json`. Node >= 20.
 

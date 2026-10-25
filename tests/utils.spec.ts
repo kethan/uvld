@@ -27,11 +27,19 @@ toCamelCase toDate toKebabCase toLowerCase toMaxValue toMinValue toNumber toPasc
 toString toUpperCase transform trim trimEnd trimStart ulid url uuid value values words`)
   .trim().split(/\s+/);
 
+// High-value additions beyond the original list.
+const NEW_NAMES = (`alpha alphaNumeric lowercase uppercase ascii semver json
+positive negative nonNegative nonPositive inRange minDate maxDate
+uniqueItems toUnique compactItems reverseItems toTitleCase truncate padStart
+padEnd replace fallback message flatten nonNullable nonOptional nonNullish`)
+  .trim().split(/\s+/);
+
 describe('utils entry point', () => {
-  test('exports all requested names plus pipe, with no missing pieces', () => {
+  test('exports all requested names plus the production additions', () => {
     expect(REQUESTED).toHaveLength(128);
-    expect(REQUESTED.filter(n => !(n in U))).toEqual([]);
-    expect(Object.keys(U)).toHaveLength(129); // 128 + pipe
+    expect(NEW_NAMES).toHaveLength(29);
+    expect([...REQUESTED, ...NEW_NAMES].filter(n => !(n in U))).toEqual([]);
+    expect(Object.keys(U)).toHaveLength(158); // 128 + 29 + pipe
     expect(typeof U.pipe).toBe('function');
   });
 
@@ -318,5 +326,115 @@ describe('checks, guards and composition', () => {
     const Schema = U.pipe(string(), U.title('Username'));
     expect((Schema as any).title).toBeUndefined(); // decorated schema is internal
     expect(parse(Schema, 'ada')).toBe('ada');
+  });
+});
+
+
+describe('production-gap additions', () => {
+  const formatTable: [string, unknown, unknown][] = [
+    ['alpha', 'Hello', 'hello2'],
+    ['alphaNumeric', 'abc123', 'abc-123'],
+    ['lowercase', 'hello', 'Hello'],
+    ['uppercase', 'HELLO', 'Hello'],
+    ['ascii', 'plain text', 'café'],
+    ['semver', '1.2.3-beta.1+build.2', '01.2.3'],
+    ['json', '{"a":1}', '{a:1}']
+  ];
+
+  test.each(formatTable)('%s accepts and rejects correctly', (name, good, bad) => {
+    const factory = mod[name] as (message?: string) => CheckFn;
+    accepts(factory(), good);
+    rejects(factory(), bad);
+    rejects(factory('Custom message'), bad, 'Custom message');
+  });
+
+  test('numeric shorthand and ranges', () => {
+    accepts(U.positive(), 1);
+    rejects(U.positive(), -1);
+    rejects(U.positive(), 0);
+    accepts(U.negative(), -1);
+    rejects(U.negative(), 1);
+    accepts(U.nonNegative(), 0);
+    rejects(U.nonNegative(), -1);
+    accepts(U.nonPositive(), 0);
+    rejects(U.nonPositive(), 1);
+    accepts(U.inRange(1, 10), 5);
+    rejects(U.inRange(1, 10), 11);
+    rejects(U.inRange(1, 10), NaN, 'Must be between 1 and 10');
+  });
+
+  test('minDate / maxDate accept Date, ISO string and timestamp bounds', () => {
+    const d = new Date('2024-06-15T00:00:00Z');
+    accepts(U.minDate('2024-01-01'), d);
+    rejects(U.minDate('2025-01-01'), d);
+    accepts(U.maxDate(d), '2024-01-01');
+    rejects(U.maxDate('2024-01-01'), d);
+    accepts(U.minDate(d.getTime()), d);
+    rejects(U.minDate('not-a-date'), d);
+  });
+
+  test('uniqueItems / toUnique / compactItems / reverseItems', () => {
+    accepts(U.uniqueItems(), [1, 2, 3]);
+    rejects(U.uniqueItems(), [1, 1, 2]);
+    expect(U.toUnique()([1, 1, 2])).toEqual([1, 2]);
+    expect(U.compactItems()([1, null, 2, undefined])).toEqual([1, 2]);
+    expect(U.reverseItems()([1, 2, 3])).toEqual([3, 2, 1]);
+    expect((U.toUnique() as any)._transform).toBe(true);
+  });
+
+  test('extra string transforms', () => {
+    expect(U.toTitleCase()('hello big world')).toBe('Hello Big World');
+    expect(U.truncate(5)('abcdefgh')).toBe('abcd…');
+    expect(U.truncate(5, '...')('abcdefgh')).toBe('ab...');
+    expect(U.truncate(10)('short')).toBe('short');
+    expect(U.padStart(5, '0')('42')).toBe('00042');
+    expect(U.padEnd(5, '.')('hi')).toBe('hi...');
+    expect(U.replace('a', 'b')('aaa')).toBe('baa');
+    expect(U.replace(/a/g, 'b')('aaa')).toBe('bbb');
+  });
+
+  test('fallback returns a default at the root of parse/safeParse', () => {
+    expect(parse(U.fallback(string(), 'guest'), 123)).toBe('guest');
+    expect(parse(U.fallback(string(), 'guest'), 'ada')).toBe('ada');
+    expect(safeParse(U.fallback(string(), 'guest'), null).success).toBe(true);
+    // An invalid fallback is still rejected, not silently accepted.
+    expect(safeParse(U.fallback(string(), 42 as unknown as string), 123).success).toBe(false);
+  });
+
+  test('message overrides issues and keeps nested paths', () => {
+    const r = safeParse(U.message(string(), 'Nope'), 1);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.message).toBe('Nope');
+
+    const nested = safeParse(object({ a: U.message(string(), 'Nope') }), { a: 1 });
+    expect(nested.success).toBe(false);
+    if (!nested.success) {
+      expect(nested.error.issues[0].message).toBe('Nope');
+      expect(nested.error.issues[0].path).toBe('["a"]');
+    }
+  });
+
+  test('nonNullable / nonOptional / nonNullish reject the right values', () => {
+    expect(safeParse(U.nonNullable(string()), null).success).toBe(false);
+    expect(safeParse(U.nonNullable(string()), 'x').success).toBe(true);
+    expect(safeParse(U.nonOptional(string()), undefined).success).toBe(false);
+    expect(safeParse(U.nonOptional(string()), 'x').success).toBe(true);
+    expect(safeParse(U.nonNullish(string()), null).success).toBe(false);
+    expect(safeParse(U.nonNullish(string()), undefined).success).toBe(false);
+    const required = safeParse(U.nonNullish(string(), 'Required'), null);
+    expect(required.success).toBe(false);
+    if (!required.success) expect(required.error.message).toBe('Required');
+  });
+
+  test('flatten turns issues into a path -> messages map', () => {
+    const r = safeParse(object({ a: string(), b: string() }), { a: 1, b: 2 });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const flat = U.flatten(r.error);
+      expect(Object.keys(flat).sort()).toEqual(['["a"]', '["b"]']);
+      expect(flat['["a"]']).toHaveLength(1);
+      expect(U.flatten(r.error.issues)).toEqual(flat);
+      expect(U.flatten([])).toEqual({});
+    }
   });
 });

@@ -4,7 +4,7 @@
 
 **uvld** validates unknown data in JavaScript and TypeScript: one small function per type, composed into schemas, with structured errors and static type inference.
 
-- **Zero runtime dependencies.** 38 core exports (~4.3 kB minified / ~1.9 kB gzip) plus **129 opt-in utilities** in `uvld/utils`, which never add a byte to the core.
+- **Zero runtime dependencies.** 38 core exports (~4.3 kB minified / ~1.9 kB gzip) plus **158 opt-in utilities** in `uvld/utils`, which never add a byte to the core.
 - **Correct by default.** Finite numbers, own properties, symbol keys, safe unions, exception-safe parsing.
 - **TypeScript-first.** `Infer<typeof schema>`, a real `is()` type guard, declarations shipped with the package.
 - **Uniform API.** Every validator factory takes `(message?, validations?)`.
@@ -294,26 +294,26 @@ parent object — normalise fields before calling `parse` if you need that.
 ### Complete utility list
 
 <details>
-<summary>All 128 requested names (plus <code>pipe</code>)</summary>
-
-```text
-  args base64 bic brand bytes check checkItems codePoints
-  creditCard cuid2 decimal description digits domain email emoji
-  empty endsWith entries everyItem examples excludes filterItems findItem
-  finite flavor graphemes gtValue guard hash hexColor hexadecimal
-  imei includes integer ip ipv4 ipv6 isbn isoDate
-  isoDateTime isoDateTimeSecond isoTime isoTimeSecond isoTimestamp isoWeek isrc jwsCompact
-  ksuid length ltValue mac mac48 mac64 mapItems maxBytes
-  maxCodePoints maxEntries maxGraphemes maxLength maxSize maxValue maxWords metadata
-  mimeType minBytes minCodePoints minEntries minGraphemes minLength minSize minValue
-  minWords multipleOf nanoid nonEmpty normalize notBytes notCodePoints notEntries
-  notGraphemes notLength notSize notValue notValues notWords octal parseBoolean
-  parseJson partialCheck rawCheck rawTransform readonly reduceItems regex returns
-  rfcEmail safeInteger size slug someItem sortItems startsWith stringifyJson
-  title toBigint toBoolean toCamelCase toDate toKebabCase toLowerCase toMaxValue
-  toMinValue toNumber toPascalCase toSnakeCase toString toUpperCase transform trim
-  trimEnd trimStart ulid url uuid value values words
-  pipe
+<summary>All   alpha alphaNumeric args ascii base64 bic brand bytes
+  check checkItems codePoints compactItems creditCard cuid2 decimal description
+  digits domain email emoji empty endsWith entries everyItem
+  examples excludes fallback filterItems findItem finite flatten flavor
+  graphemes gtValue guard hash hexColor hexadecimal imei inRange
+  includes integer ip ipv4 ipv6 isbn isoDate isoDateTime
+  isoDateTimeSecond isoTime isoTimeSecond isoTimestamp isoWeek isrc json jwsCompact
+  ksuid length lowercase ltValue mac mac48 mac64 mapItems
+  maxBytes maxCodePoints maxDate maxEntries maxGraphemes maxLength maxSize maxValue
+  maxWords message metadata mimeType minBytes minCodePoints minDate minEntries
+  minGraphemes minLength minSize minValue minWords multipleOf nanoid negative
+  nonEmpty nonNegative nonNullable nonNullish nonOptional nonPositive normalize notBytes
+  notCodePoints notEntries notGraphemes notLength notSize notValue notValues notWords
+  octal padEnd padStart parseBoolean parseJson partialCheck pipe positive
+  rawCheck rawTransform readonly reduceItems regex replace returns reverseItems
+  rfcEmail safeInteger semver size slug someItem sortItems startsWith
+  stringifyJson title toBigint toBoolean toCamelCase toDate toKebabCase toLowerCase
+  toMaxValue toMinValue toNumber toPascalCase toSnakeCase toString toTitleCase toUnique
+  toUpperCase transform trim trimEnd trimStart truncate ulid uniqueItems
+  uppercase url uuid value values words
 ```
 
 </details>
@@ -325,26 +325,40 @@ Grouped by purpose:
   `imei`, `ip`, `ipv4`, `ipv6`, `isbn`, `isrc`, `isoDate`, `isoDateTime`,
   `isoDateTimeSecond`, `isoTime`, `isoTimeSecond`, `isoTimestamp`, `isoWeek`,
   `jwsCompact`, `ksuid`, `mac`, `mac48`, `mac64`, `mimeType`, `nanoid`,
-  `octal`, `slug`, `ulid`, `url`, `uuid`, `hash`.
+  `octal`, `slug`, `ulid`, `url`, `uuid`, `hash`, `alpha`, `alphaNumeric`,
+  `lowercase`, `uppercase`, `ascii`, `semver`, `json`.
 - **Size / count / value constraints:** `length`, `minLength`, `maxLength`,
   `notLength`, `bytes`, `minBytes`, `maxBytes`, `notBytes`, `codePoints`,
   `minCodePoints`, `maxCodePoints`, `notCodePoints`, `graphemes`,
   `minGraphemes`, `maxGraphemes`, `notGraphemes`, `words`, `minWords`,
   `maxWords`, `notWords`, `size`, `minSize`, `maxSize`, `notSize`, `entries`,
   `minEntries`, `maxEntries`, `notEntries`, `minValue`, `maxValue`, `gtValue`,
-  `ltValue`, `value`, `notValue`, `notValues`, `values`, `multipleOf`.
+  `ltValue`, `value`, `notValue`, `notValues`, `values`, `multipleOf`,
+  `positive`, `negative`, `nonNegative`, `nonPositive`, `inRange`, `minDate`,
+  `maxDate`.
 - **Number / emptiness / membership:** `finite`, `integer`, `safeInteger`,
   `empty`, `nonEmpty`, `includes`, `excludes`, `startsWith`, `endsWith`,
   `regex`, `check`, `rawCheck`, `partialCheck`, `guard`, `everyItem`,
-  `someItem`, `checkItems`.
+  `someItem`, `checkItems`, `uniqueItems`, `toUnique`, `compactItems`,
+  `reverseItems`.
 - **Transforms:** `trim`, `trimStart`, `trimEnd`, `toLowerCase`, `toUpperCase`,
   `toCamelCase`, `toPascalCase`, `toKebabCase`, `toSnakeCase`, `normalize`,
   `toNumber`, `toBoolean`, `parseBoolean`, `toBigint`, `toDate`, `toString`,
   `toMinValue`, `toMaxValue`, `parseJson`, `stringifyJson`, `mapItems`,
-  `filterItems`, `sortItems`, `reduceItems`, `findItem`, `rawTransform`,
+  `filterItems`, `sortItems`, `reduceItems`, `findItem`, `toTitleCase`,
+  `truncate`, `padStart`, `padEnd`, `replace`, `rawTransform`,
   `transform` (re-export of core `transform`).
-- **Composition / metadata:** `pipe`, `args`, `returns`, `readonly`, `title`,
-  `description`, `metadata`, `examples`, `brand`, `flavor`.
+- **Composition / metadata / errors:** `pipe`, `args`, `returns`, `readonly`,
+  `title`, `description`, `metadata`, `examples`, `brand`, `flavor`, `fallback`,
+  `message`, `nonNullable`, `nonOptional`, `nonNullish`, `flatten`.
+
+Production additions beyond the original list: `fallback` (default on
+failure), `message` (override issue text), `flatten` (path → messages map for
+forms/APIs), `nonNullable`/`nonOptional`/`nonNullish`, `alpha`,
+`alphaNumeric`, `lowercase`, `uppercase`, `ascii`, `semver`, `json`,
+`positive`/`negative`/`nonNegative`/`nonPositive`, `inRange`, `minDate`/
+`maxDate`, `uniqueItems`, `toUnique`, `compactItems`, `reverseItems`,
+`toTitleCase`, `truncate`, `padStart`, `padEnd`, `replace`.
 
 Notes: `hash(algorithm)` checks hex digests for md5/sha1/sha256/sha384/sha512;
 `nanoid(size)` defaults to 21; `creditCard`, `imei` and `isbn` verify checksums;
@@ -353,7 +367,7 @@ Notes: `hash(algorithm)` checks hex digests for md5/sha1/sha256/sha384/sha512;
 (`title(schema, 'Name')`) or act as metadata inside `pipe`.
 
 See [`examples/utils.mjs`](examples/utils.mjs) and
-[`tests/utils.spec.ts`](tests/utils.spec.ts) (84 tests) for runnable coverage.
+[`tests/utils.spec.ts`](tests/utils.spec.ts) (99 tests) for runnable coverage.
 
 ---
 
@@ -380,8 +394,8 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 | `dist/index.js` (ESM) | 4,315 B | 1,895 B | 1,756 B |
 | `dist/index.cjs` (CJS) | 4,422 B | 1,830 B | 1,687 B |
 | `dist/index.min.js` (IIFE) | 4,229 B | 1,818 B | 1,677 B |
-| `dist/utils.js` (ESM, opt-in) | 10,896 B | 4,225 B | 3,819 B |
-| `dist/utils.cjs` (CJS, opt-in) | 11,247 B | 4,121 B | 3,724 B |
+| `dist/utils.js` (ESM, opt-in) | 13,608 B | 5,073 B | 4,600 B |
+| `dist/utils.cjs` (CJS, opt-in) | 14,033 B | 4,916 B | 4,431 B |
 
 `uvld/utils` is a **separate entry point**: `dist/utils.js` imports the core as
 an external module (never duplicates it), so the core bundle above is
@@ -418,7 +432,7 @@ ESM exports, so you only pay for what you import.
 
 ```bash
 npm ci
-npm test             # vitest run (143 tests)
+npm test             # vitest run (158 tests)
 npm run typecheck    # tsc --noEmit over source types, tests and examples
 npm run examples     # run all 9 runnable examples
 npm run build        # ESM + CJS + IIFE bundles and dist/index.d.ts

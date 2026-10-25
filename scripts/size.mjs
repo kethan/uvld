@@ -11,8 +11,8 @@ const BUDGET = {
   'dist/index.cjs': { raw: 4600, gzip: 1900, brotli: 1750 },
   'dist/index.min.js': { raw: 4400, gzip: 1900, brotli: 1750 },
   // optional utils entry point
-  'dist/utils.js': { raw: 11600, gzip: 4500, brotli: 4100 },
-  'dist/utils.cjs': { raw: 11900, gzip: 4400, brotli: 4000 }
+  'dist/utils.js': { raw: 14200, gzip: 5300, brotli: 4800 },
+  'dist/utils.cjs': { raw: 14600, gzip: 5150, brotli: 4650 }
 };
 
 let failed = false;

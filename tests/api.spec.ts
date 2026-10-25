@@ -49,6 +49,13 @@ toCamelCase toDate toKebabCase toLowerCase toMaxValue toMinValue toNumber toPasc
 toString toUpperCase transform trim trimEnd trimStart ulid url uuid value values words`)
   .trim().split(/\s+/);
 
+// High-value additions identified in the production gap review.
+const PROD_ADDITIONS = (`alpha alphaNumeric lowercase uppercase ascii semver json
+positive negative nonNegative nonPositive inRange minDate maxDate
+uniqueItems toUnique compactItems reverseItems toTitleCase truncate padStart
+padEnd replace fallback message flatten nonNullable nonOptional nonNullish`)
+  .trim().split(/\s+/);
+
 describe('API surface stays in sync', () => {
   test('every runtime export is declared in index.d.ts and vice versa', () => {
     const runtime = runtimeExports();
@@ -66,7 +73,7 @@ describe('API surface stays in sync', () => {
 
   test('README documents every core and utils export', () => {
     const readme = read('README.md');
-    const missing = [...runtimeExports(), ...UTILS_NAMES]
+    const missing = [...runtimeExports(), ...UTILS_NAMES, ...PROD_ADDITIONS]
       .filter(name => !new RegExp(`\\b${name}\\b`).test(readme));
     expect(missing).toEqual([]);
     expect(readme).toMatch(/## Quickstart/i);
@@ -76,9 +83,10 @@ describe('API surface stays in sync', () => {
 
   test('utils entry point: runtime exports match declarations and the feature list', () => {
     const runtime = utilsExports();
-    expect(runtime).toHaveLength(129); // 128 requested + pipe
+    expect(runtime).toHaveLength(158); // 128 requested + 29 additions + pipe
     expect(UTILS_NAMES).toHaveLength(128);
-    expect(UTILS_NAMES.filter(n => !runtime.includes(n))).toEqual([]);
+    expect(PROD_ADDITIONS).toHaveLength(29);
+    expect([...UTILS_NAMES, ...PROD_ADDITIONS].filter(n => !runtime.includes(n))).toEqual([]);
     expect(declaredUtils()).toEqual(runtime);
     expect(runtime).toContain('pipe');
   });

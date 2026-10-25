@@ -46,11 +46,14 @@ console.log('CJS require: OK (' + require.resolve('uvld') + ')');
 `);
 
   writeFileSync(join(consumer, 'utils.mjs'), `
-import { email, minLength, pipe, trim, ipv4 } from 'uvld/utils';
+import { email, minLength, pipe, trim, ipv4, fallback, flatten, semver } from 'uvld/utils';
 import { string, parse, safeParse } from 'uvld';
 if (!safeParse(string('', [email(), minLength(5)]), 'ada@example.com').success) throw new Error('utils check failed');
 if (parse(pipe(string(), trim()), '  hi  ') !== 'hi') throw new Error('utils pipe failed');
 if (ipv4()('1.2.3.4') !== true) throw new Error('ipv4 failed');
+if (parse(fallback(string(), 'guest'), 123) !== 'guest') throw new Error('fallback failed');
+if (semver()('1.2.3') !== true) throw new Error('semver failed');
+if (!flatten(safeParse(string(), 1).error)['']) throw new Error('flatten failed');
 console.log('utils ESM import: OK');
 `);
 
@@ -58,19 +61,22 @@ console.log('utils ESM import: OK');
 const u = require('uvld/utils');
 const core = require('uvld');
 if (u.email()('a@b.com') !== true) throw new Error('utils CJS failed');
+if (core.parse(u.fallback(core.string(), 'guest'), 1) !== 'guest') throw new Error('utils fallback CJS failed');
 if (!core.safeParse(core.string(), 'ok').success) throw new Error('core CJS failed');
 if (!require.resolve('uvld/utils').endsWith('utils.cjs')) throw new Error('utils require resolved to the wrong file');
 console.log('utils CJS require: OK');
 `);
 
   writeFileSync(join(consumer, 'utils-types.ts'), `
-import { email, pipe, trim, minLength, type Check, type TransformAction } from 'uvld/utils';
+import { email, pipe, trim, minLength, fallback, flatten, type Check, type TransformAction } from 'uvld/utils';
 import { string, parse } from 'uvld';
 const format: Check = email();
 const action: TransformAction = trim();
 const result = parse(pipe(string(), trim(), email()), ' a@b.com ');
 const s: string = result;
-void [format, action, minLength, s];
+const withDefault = parse(fallback(string(), 'guest'), 1);
+const flat: Record<string, string[]> = flatten([]);
+void [format, action, minLength, s, withDefault, flat];
 `);
 
   writeFileSync(join(consumer, 'types.ts'), `

@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { object, string, array, number, safeParse, parse } from '../src/index.js';
 import {
   email, minLength, maxLength, trim, toLowerCase, pipe, uuid, url,
-  ipv4, creditCard, minValue, maxValue, integer, mapItems
+  ipv4, creditCard, minValue, maxValue, integer, mapItems,
+  fallback, flatten, semver, positive, uniqueItems, toUnique
 } from '../src/utils.js';
 
 export function run() {
@@ -42,6 +43,18 @@ export function run() {
   // 5. Transform actions work on arrays too.
   assert.deepEqual(mapItems(x => x * 2)([1, 2, 3]), [2, 4, 6]);
 
+  // 6. Production helpers: defaults, error maps and a few more formats.
+  assert.equal(parse(fallback(string(), 'guest'), 123), 'guest');
+  assert.equal(semver()('1.2.3-beta.1'), true);
+  assert.equal(positive()(-1) === true, false);
+  assert.equal(uniqueItems()([1, 1]) === true, false);
+  assert.deepEqual(toUnique()([1, 1, 2]), [1, 2]);
+  const bad = safeParse(object({ id: string('', [uuid()]), name: string() }), { id: 'nope', name: 1 });
+  assert.equal(bad.success, false);
+  const errors = flatten(bad.error);
+  assert.ok(errors['["id"]'] && errors['["name"]']);
+
   console.log('clean email:', parse(CleanEmail, '  ADA@Example.COM  '));
   console.log('product validated:', product.name, product.price);
+  console.log('flattened errors:', JSON.stringify(errors));
 }

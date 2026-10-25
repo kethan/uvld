@@ -1,5 +1,5 @@
 // uvld/utils — declarations for the optional, tree-shakeable entry point.
-import type { Validator, Context, ValidationResult } from './index.js';
+import type { Validator, Context, Issue, ValidationResult } from './index.js';
 
 /** A check usable standalone, in a core `validations` array, or inside `pipe`. */
 export type Check<T = unknown> = (value: T, context?: Context) => ValidationResult;
@@ -164,3 +164,40 @@ export const readonly: <T>(schema: Validator<T>) => Validator<T>;
 export const args: (...schemas: Validator<any>[]) => Validator<any[]>;
 export const returns: <T>(schema: Validator<T>) =>
   <A extends any[], R>(fn: (...args: A) => R) => (...args: A) => R;
+
+// --- production-gap additions ----------------------------------------------
+/** Extra string formats. */
+export const alpha: Format;
+export const alphaNumeric: Format;
+export const lowercase: Format;
+export const uppercase: Format;
+export const ascii: Format;
+export const semver: Format;
+export const json: Format;
+/** Numeric / date shorthand constraints. */
+export const positive: Format;
+export const negative: Format;
+export const nonNegative: Format;
+export const nonPositive: Format;
+export const inRange: (min: number, max: number, message?: string) => Check<unknown>;
+export const minDate: (bound: Date | string | number, message?: string) => Check<unknown>;
+export const maxDate: (bound: Date | string | number, message?: string) => Check<unknown>;
+/** Collection checks / transforms. */
+export const uniqueItems: Format;
+export const toUnique: () => TransformAction<any, any[]>;
+export const compactItems: () => TransformAction<any, any[]>;
+export const reverseItems: () => TransformAction<any, any[]>;
+/** Extra string transforms. */
+export const toTitleCase: TextTransform;
+export const truncate: (max: number, suffix?: string) => TransformAction<any, string>;
+export const padStart: (length: number, fill?: string) => TransformAction<any, string>;
+export const padEnd: (length: number, fill?: string) => TransformAction<any, string>;
+export const replace: (search: string | RegExp, replacement: string) => TransformAction<any, string>;
+/** Schema helpers: defaults, message overrides, nullish rejection, errors. */
+export const fallback: <T>(schema: Validator<T>, value: T) => Validator<T>;
+export const message: <T>(schema: Validator<T>, text: string) => Validator<T>;
+export const nonNullable: <T>(schema: Validator<T>, message?: string) => Validator<T>;
+export const nonOptional: <T>(schema: Validator<T>, message?: string) => Validator<T>;
+export const nonNullish: <T>(schema: Validator<T>, message?: string) => Validator<T>;
+/** `{ path: messages[] }` map from an Issue[] or VError. */
+export const flatten: (source: Issue[] | { issues: Issue[] }) => Record<string, string[]>;

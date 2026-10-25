@@ -7,7 +7,7 @@
 // actions are used with `pipe(...)` / core `transform(schema, action)`.
 import {
   transform as coreTransform, is as coreIs, safeParse, object as coreObject,
-  tuple as coreTuple
+  tuple as coreTuple, and as coreAnd
 } from './index.js';
 
 // --- small helpers ---------------------------------------------------------
@@ -314,6 +314,80 @@ const returns = schema => fn => function (...params) {
   return result;
 };
 
+
+// --- production gaps: formats, defaults, error helpers ---------------------
+// Extra formats that are cheap and commonly needed at API/DB boundaries.
+const alpha = fmt('letters', v => typeof v === 'string' && /^[A-Za-z]+$/.test(v));
+const alphaNumeric = fmt('letters and digits', v => typeof v === 'string' && /^[A-Za-z0-9]+$/.test(v));
+const lowercase = fmt('lowercase', v => typeof v === 'string' && v === v.toLowerCase());
+const uppercase = fmt('uppercase', v => typeof v === 'string' && v === v.toUpperCase());
+const ascii = fmt('ASCII', v => typeof v === 'string' && /^[\x00-\x7F]*$/.test(v));
+const semver = fmt('semver', v => typeof v === 'string' &&
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(v));
+const json = fmt('JSON', v => {
+  if (typeof v !== 'string') return false;
+  try { JSON.parse(v); return true; } catch { return false; }
+});
+
+// Numeric / date shorthand constraints.
+const positive = fmt('positive number', v => typeof v === 'number' && Number.isFinite(v) && v > 0);
+const negative = fmt('negative number', v => typeof v === 'number' && Number.isFinite(v) && v < 0);
+const nonNegative = fmt('non-negative number', v => typeof v === 'number' && Number.isFinite(v) && v >= 0);
+const nonPositive = fmt('non-positive number', v => typeof v === 'number' && Number.isFinite(v) && v <= 0);
+const inRange = (min, max, message = `Must be between ${min} and ${max}`) => v =>
+  typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? yes : message;
+const dateValue = v => v instanceof Date ? v.getTime()
+  : typeof v === 'string' ? Date.parse(v)
+    : typeof v === 'number' ? v : NaN;
+const minDate = (bound, message = `Min date ${String(bound)}`) => v => {
+  const t = dateValue(v), b = dateValue(bound);
+  return Number.isFinite(t) && Number.isFinite(b) && t >= b ? yes : message;
+};
+const maxDate = (bound, message = `Max date ${String(bound)}`) => v => {
+  const t = dateValue(v), b = dateValue(bound);
+  return Number.isFinite(t) && Number.isFinite(b) && t <= b ? yes : message;
+};
+
+// Collection checks / transforms.
+const uniqueItems = fmt('unique items', v => Array.isArray(v) && new Set(v).size === v.length);
+const toUnique = () => tx(v => Array.isArray(v) ? [...new Set(v)] : v);
+const compactItems = () => tx(v => Array.isArray(v) ? v.filter(x => x != null) : v);
+const reverseItems = () => tx(v => Array.isArray(v) ? [...v].reverse() : v);
+
+// Extra string transforms.
+const toTitleCase = () => tx(v => splitWords(v).map(cap).join(' '));
+const truncate = (max, suffix = '…') => tx(v => {
+  const str = String(v);
+  return str.length > max ? str.slice(0, Math.max(0, max - suffix.length)) + suffix : str;
+});
+const padStart = (length, fill = ' ') => tx(v => String(v).padStart(length, fill));
+const padEnd = (length, fill = ' ') => tx(v => String(v).padEnd(length, fill));
+const replace = (search, replacement) => tx(v => String(v).replace(search, replacement));
+
+// Schema helpers: defaults, message overrides, nullish rejection, error output.
+const fallback = (schema, value) => (input, c) =>
+  safeParse(schema, input).success ? [] : coreTransform(schema, () => value)(input, c);
+const message = (schema, text) => (value, c) => {
+  const result = safeParse(schema, value);
+  if (result.success) return [];
+  return result.error.issues.map(i => ({
+    ...i, message: text, path: (c?.path || '') + i.path, origin: c?.origin || 'value'
+  }));
+};
+const nonNullable = (schema, message = 'Must not be null') =>
+  coreAnd(v => v === null ? message : yes, schema);
+const nonOptional = (schema, message = 'Must be defined') =>
+  coreAnd(v => v === undefined ? message : yes, schema);
+const nonNullish = (schema, message = 'Must not be null or undefined') =>
+  coreAnd(v => v == null ? message : yes, schema);
+/** Turn an Issue[] or VError into a `{ path: messages[] }` map for forms/APIs. */
+const flatten = source => {
+  const issues = Array.isArray(source) ? source : source?.issues || [];
+  const flat = Object.create(null);
+  for (const i of issues) (flat[i.path || ''] ||= []).push(i.message);
+  return flat;
+};
+
 export {
   args, base64, bic, brand, bytes, check, checkItems, codePoints, creditCard,
   cuid2, decimal, description, digits, domain, email, emoji, empty, endsWith,
@@ -332,5 +406,10 @@ export {
   title, toBigint, toBoolean, toCamelCase, toDate, toKebabCase, toLowerCase,
   toMaxValue, toMinValue, toNumber, toPascalCase, toSnakeCase, toString,
   toUpperCase, transform, trim, trimEnd, trimStart, ulid, url, uuid, value,
-  values, words
+  values, words,
+  alpha, alphaNumeric, lowercase, uppercase, ascii, semver, json,
+  positive, negative, nonNegative, nonPositive, inRange, minDate, maxDate,
+  uniqueItems, toUnique, compactItems, reverseItems,
+  toTitleCase, truncate, padStart, padEnd, replace,
+  fallback, message, flatten, nonNullable, nonOptional, nonNullish
 };

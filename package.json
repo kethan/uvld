@@ -1,47 +1,76 @@
 {
-	"name": "uvld",
-	"description": "validator",
-	"version": "0.0.1",
-	"type": "module",
-	"source": "./src/index.js",
-	"main": "./dist/index.js",
-	"module": "./dist/index.js",
-	"browser": "./dist/index.es.js",
-	"unpkg": "./dist/index.min.js",
-	"umd:main": "./dist/index.umd.js",
-	"exports": {
-		"browser": "./dist/index.es.js",
-		"umd": "./dist/index.umd.js",
-		"import": "./dist/index.es.js",
-		"default": "./dist/index.es.js",
-		"require": "./dist/index.js"
-	},
-	"types": "./index.d.ts",
-	"files": [
-		"dist"
-	],
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/kethan/uvld.git"
-	},
-	"scripts": {
-		"build": "rollup --config rollup.config.js",
-		"test": "vitest"
-	},
-	"devDependencies": {
-		"@rollup/plugin-terser": "^0.4.4",
-		"rollup": "^4.22.4",
-		"rollup-plugin-copy": "^3.5.0",
-		"vitest": "^2.1.1"
-	},
-	"keywords": [],
-	"author": "Kethan Surana",
-	"license": "ISC",
-	"bugs": {
-		"url": "https://github.com/kethan/uvld/issues"
-	},
-	"homepage": "https://github.com/kethan/uvld#readme",
-	"dependencies": {
-		"rollup-plugin-bundle-size": "^1.0.3"
-	}
+  "name": "uvld",
+  "version": "1.0.0",
+  "description": "Tiny, zero-dependency schema validation for JavaScript and TypeScript",
+  "type": "module",
+  "source": "./src/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "browser": "./dist/index.js",
+  "unpkg": "./dist/index.min.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/index.js",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "import": "./dist/utils.js",
+      "require": "./dist/utils.cjs",
+      "default": "./dist/utils.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "utils.d.ts"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "rollup --config rollup.config.js",
+    "size": "node scripts/size.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "examples": "node examples/run-all.mjs",
+    "check": "npm run typecheck && npm run test && npm run examples && npm run build && npm run size && npm run smoke",
+    "prepack": "npm run build"
+  },
+  "keywords": [
+    "validation",
+    "validator",
+    "schema",
+    "typescript",
+    "typescript-first",
+    "tiny",
+    "zero-dependency",
+    "parse",
+    "zod"
+  ],
+  "author": "Kethan Surana",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kethan/uvld.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kethan/uvld/issues"
+  },
+  "homepage": "https://github.com/kethan/uvld#readme",
+  "devDependencies": {
+    "@rollup/plugin-terser": "^1.0.2",
+    "@types/node": "^22.0.0",
+    "rollup": "^4.65.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  }
 }

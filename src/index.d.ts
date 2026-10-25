@@ -1,251 +1,199 @@
-// index.d.ts
+// uvld 1.0.0 — public TypeScript surface.
+// Kept in sync with src/index.js by tests/api.spec.ts (export-name check).
 
-// Define the Issue interface
-export interface Issue<T> {
+/** 'value' for data, 'key' for record/map keys; refinements may set others. */
+export type Origin = 'value' | 'key' | (string & {});
+
+/** A single validation failure. `received` is a type tag, never the raw value. */
+export interface Issue {
   message: string;
   expected: string;
-  received: T;
+  received: string;
+  /** Unambiguous bracket path, e.g. `["user"]["tags"][0]`; root is `""`. */
   path: string;
-  origin: string;
+  origin: Origin;
 }
 
-// Define the Validator type
-export type Validator<T> = (
-  value: T,
-  path?: string,
-  origin?: string
-) => Issue<T>[] | boolean;
+/** Threaded through every validator; you rarely need to touch it. */
+export interface Context {
+  path: string;
+  origin: Origin;
+  depth: number;
+  out: { set: boolean; value: unknown };
+}
 
-// Utility type to infer the type from a Validator
+/** A single result; partial issues are filled in with defaults by the library. */
+export type RefinementResult = Issue | Partial<Issue> | boolean | string | null | undefined;
+/** What a validator or refinement may return. `call()` normalises it to Issue[]. */
+export type ValidationResult = RefinementResult | RefinementResult[];
+
+/** A validation function: returns issues (empty = valid), or a normalisable result. */
+export type Refinement = (value: any, context?: Context) => ValidationResult;
+
+/**
+ * `readonly _output` is a type-only phantom — it is never assigned at runtime.
+ * It is what lets `Infer` recover the static type a schema validates.
+ */
+export type Validator<T = unknown> = Refinement & { readonly _output?: T };
+
+/** `Infer<typeof schema>` — the TypeScript type produced by a schema. */
 export type Infer<V> = V extends Validator<infer T> ? T : never;
 
-// Helper type to create an intersection of types
-export type UnionToIntersection<U> = (
-  U extends any ? (k: U) => void : never
-) extends (k: infer I) => void
-  ? I
-  : never;
+export type InferShape<T> = { [K in keyof T]: Infer<T[K]> };
 
-// The 'define' function
+export type UnionToIntersection<U> = (
+  U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void ? I : never;
+
+/** `(message?, validations?) => Validator<T>` — uniform across every validator. */
+export type ValidatorFactory<T> = (message?: string, validations?: Refinement[]) => Validator<T>;
+
+export type SafeParseReturn<T> =
+  | { success: true; data: T }
+  | { success: false; error: VError };
+
+// --- extension point -------------------------------------------------------
 export function define<T>(
   type: string,
-  validate: (value: unknown) => value is T
-): (
-  message?: string,
-  validations?: Validator<T>[]
-) => Validator<T>;
+  validate: (value: unknown, context?: Context) => boolean
+): ValidatorFactory<T>;
 
-// The 'custom' function
-export function custom<T = unknown>(
-  validate: (value: T) => boolean,
-  message?: string,
-  validations?: Validator<T>[]
-): Validator<T>;
+// --- primitives ------------------------------------------------------------
+export const string: ValidatorFactory<string>;
+export const boolean: ValidatorFactory<boolean>;
+/** Finite numbers only: NaN and ±Infinity are rejected. */
+export const number: ValidatorFactory<number>;
+export const func: ValidatorFactory<Function>;
+export const symbol: ValidatorFactory<symbol>;
+export const bigint: ValidatorFactory<bigint>;
+export const integer: ValidatorFactory<number>;
+export const date: ValidatorFactory<Date>;
+export const promise: ValidatorFactory<Promise<unknown>>;
+export const never: ValidatorFactory<never>;
+export const any: ValidatorFactory<any>;
+export const unknown: ValidatorFactory<unknown>;
+export const nullish: ValidatorFactory<null | undefined>;
 
-// Basic validators
-export const string: (
-  message?: string,
-  validations?: Validator<string>[]
-) => Validator<string>;
-
-export const boolean: (
-  message?: string,
-  validations?: Validator<boolean>[]
-) => Validator<boolean>;
-
-export const number: (
-  message?: string,
-  validations?: Validator<number>[]
-) => Validator<number>;
-
-export const integer: (
-  message?: string,
-  validations?: Validator<number>[]
-) => Validator<number>;
-
-export const func: (
-  message?: string,
-  validations?: Validator<Function>[]
-) => Validator<Function>;
-
-export const symbol: (
-  message?: string,
-  validations?: Validator<symbol>[]
-) => Validator<symbol>;
-
-export const bigint: (
-  message?: string,
-  validations?: Validator<bigint>[]
-) => Validator<bigint>;
-
-// export const nan: (
-//   message?: string,
-//   validations?: Validator<number>[]
-// ) => Validator<number>;
-
-export const date: (
-  message?: string,
-  validations?: Validator<Date>[]
-) => Validator<Date>;
-
-export const promise: <T>(
-  message?: string,
-  validations?: Validator<Promise<T>>[]
-) => Validator<Promise<any>>;
-
-export const never: (
-  message?: string,
-  validations?: Validator<never>[]
-) => Validator<never>;
-
-export const any: (
-  message?: string,
-  validations?: Validator<any>[]
-) => Validator<any>;
-
-export const nullish: (
-  message?: string,
-  validations?: Validator<null | undefined>[]
-) => Validator<null | undefined>;
-
-// Literal validator
-export function literal<T extends string | number | boolean | null | undefined>(
+// --- literals, classes, enums ----------------------------------------------
+export function literal<const T extends string | number | boolean | bigint | symbol | null | undefined>(
   v: T,
   message?: string,
-  ...validations: Validator<T>[]
+  validations?: Refinement[]
 ): Validator<T>;
 
-// Instance validator
 export function instance<T>(
-  ref: new (...args: any[]) => T,
+  ref: abstract new (...args: any[]) => T,
   message?: string,
-  ...validations: Validator<T>[]
+  validations?: Refinement[]
 ): Validator<T>;
 
-// Enums validator
-export function enums<T extends readonly any[]>(
+export function enums<const T extends readonly unknown[]>(
   values: T,
   message?: string,
-  ...validations: Validator<T>[]
+  validations?: Refinement[]
 ): Validator<T[number]>;
 
-// Optional validator
+// --- wrappers --------------------------------------------------------------
 export function optional<T>(
   schema: Validator<T>,
   message?: string,
-  ...validations: Validator<T | undefined>[]
+  validations?: Refinement[]
 ): Validator<T | undefined>;
 
-// Nullable validator
 export function nullable<T>(
   schema: Validator<T>,
   message?: string,
-  ...validations: Validator<T | null>[]
+  validations?: Refinement[]
 ): Validator<T | null>;
 
-// Complex types
-export function record<K extends string, V>(
+export function custom<T = unknown>(
+  validate: (value: T, context?: Context) => boolean,
+  message?: string,
+  validations?: Refinement[]
+): Validator<T>;
+
+// --- composites ------------------------------------------------------------
+export function record<K extends PropertyKey, V>(
   keySchema: Validator<K>,
   valueSchema: Validator<V>,
   message?: string,
-  validations?: Validator<Record<K, V>>[]
+  validations?: Refinement[]
 ): Validator<Record<K, V>>;
 
 export function map<K, V>(
   keySchema: Validator<K>,
   valueSchema: Validator<V>,
   message?: string,
-  validations?: Validator<Map<K, V>>[]
+  validations?: Refinement[]
 ): Validator<Map<K, V>>;
 
 export function array<T>(
   schema: Validator<T>,
   message?: string,
-  validations?: Validator<T[]>[]
+  validations?: Refinement[]
 ): Validator<T[]>;
 
 export function set<T>(
   schema: Validator<T>,
   message?: string,
-  validations?: Validator<Set<T>>[]
+  validations?: Refinement[]
 ): Validator<Set<T>>;
 
-export function object<T extends Record<string, Validator<any>>>(
+/** Plain objects only; own properties only; extra keys allowed unless `exact`. */
+export function object<T extends Record<PropertyKey, Validator<any>>>(
   schema: T,
   message?: string,
-  validations?: Validator<{ [K in keyof T]: Infer<T[K]> }>[],
+  validations?: Refinement[],
   exact?: boolean
-): Validator<
-  { [K in keyof T]: Infer<T[K]> } & { [key: string]: any }
->;
+): Validator<InferShape<T>>;
 
-export function strict<T extends Record<string, Validator<any>>>(
+/** `object(schema, ..., true)` — rejects unknown own keys (including symbols). */
+export function strict<T extends Record<PropertyKey, Validator<any>>>(
   schema: T,
   message?: string,
-  validations?: Validator<{ [K in keyof T]: Infer<T[K]> }>[]
+  validations?: Refinement[]
+): Validator<InferShape<T>>;
+
+export function tuple<const T extends readonly Validator<any>[]>(
+  schemas: T,
+  message?: string,
+  validations?: Refinement[]
 ): Validator<{ [K in keyof T]: Infer<T[K]> }>;
 
-// Tuple validator
-export function tuple<T extends Validator<any>[]>(
-  schemas: [...T],
-  message?: string,
-  validations?: Validator<{ [K in keyof T]: Infer<T[K]> }>[]
-): Validator<{ [K in keyof T]: Infer<T[K]> }>;
+// --- constraints -----------------------------------------------------------
+type Sized = number | string | unknown[] | Map<unknown, unknown> | Set<unknown>;
+/** number >= bound, or length/size >= bound for string/array/Map/Set. */
+export function min(bound: number, message?: string, validations?: Refinement[]): Validator<Sized>;
+/** number <= bound, or length/size <= bound for string/array/Map/Set. */
+export function max(bound: number, message?: string, validations?: Refinement[]): Validator<Sized>;
 
-// Utility functions
-export function min<T>(
-  minValue: number,
-  message?: string,
-  validations?: Validator<T[]>[]
-): Validator<number | string | any[] | Map<any, any> | Set<any>>;
-
-export function max<T>(
-  maxValue: number,
-  message?: string,
-  validations?: Validator<T[]>[]
-): Validator<number | string | any[] | Map<any, any> | Set<any>>;
-
-export function or<T extends Validator<any>[]>(
-  ...schemas: T
-): Validator<Infer<T[number]>>;
-
-export function and<T extends Validator<any>[]>(
+// --- combinators -----------------------------------------------------------
+export function or<const T extends readonly Validator<any>[]>(...schemas: T): Validator<Infer<T[number]>>;
+export function and<const T extends readonly Validator<any>[]>(
   ...schemas: T
 ): Validator<UnionToIntersection<Infer<T[number]>>>;
-
-export function lazy<T>(
-  resolveSchema: () => Validator<T>
+export function not(
+  schema: Validator<any>,
+  message?: string,
+  validations?: Refinement[]
+): Validator<unknown>;
+export function lazy<T>(resolve: () => Validator<T>): Validator<T>;
+/**
+ * Validate `fn(value)` instead of `value`. At the root of parse/safeParse the
+ * returned data is `fn(value)` (applied exactly once). Nested transforms
+ * affect validation only. Annotate the callback parameter for type inference.
+ */
+export function transform<T, U = unknown>(
+  schema: Validator<T>,
+  fn: (value: U) => T
 ): Validator<T>;
 
-export function transform<T, U>(
-  schema: Validator<T>,
-  transformer: (value: U) => T
-): Validator<U>;
+// --- entry points ----------------------------------------------------------
+export function is<T>(schema: Validator<T>, value: unknown): value is T;
+export function parse<T>(schema: Validator<T>, value: unknown): T;
+export function safeParse<T>(schema: Validator<T>, value: unknown): SafeParseReturn<T>;
 
-export function not<T>(
-  schema: Validator<T>,
-  message?: string
-): Validator<unknown>;
-
-// Type guard function
-export function is<T>(
-  schema: Validator<T>,
-  value: unknown
-): boolean;
-
-// Parse functions
-export function parse<T>(
-  schema: Validator<T>,
-  value: unknown
-): T;
-
-export function safeParse<T>(
-  schema: Validator<T>,
-  value: unknown
-): { success: true; data: T } | { success: false; error: VError };
-
-// VError class
 export class VError extends Error {
-  issues: Issue<unknown>[];
-  constructor(message: string, issues?: Issue<unknown>[]);
+  issues: Issue[];
+  constructor(message: string, issues?: Issue[]);
 }

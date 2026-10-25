@@ -1,110 +1,192 @@
-const define = (type, validate) =>
-  (message = '', validations = []) =>
-    (value, path = "", origin = "value", issues = []) => !validate(value)
-      ? [{ message: message || `Expected ${type}, received ${typeof value}`, expected: type, received: value, path, origin }]
-      : (issues = validations.flatMap(v => v(value, path)).filter(v => v !== true), issues.length ? issues : []);
-const string = define("string", value => typeof value === "string");
-const boolean = define("boolean", value => typeof value === "boolean");
-const number = define("number", value => typeof value === "number");
-const func = define("function", value => typeof value === "function");
-const symbol = define("symbol", value => typeof value === "symbol");
-const bigint = define("bigint", value => typeof value === "bigint");
-const integer = define("integer", value => Number.isInteger(value));
-const date = define("date", value => value instanceof Date);
-const promise = define("promise", value => value instanceof Promise);
-const never = define("never", () => false);
-const any = define("any", () => true);
-const unknown = define("unknown", () => true);
-const nullish = define("nullish", v => v == null || v === undefined);
-const literal = (v, ...args) => define("literal", value => value === v)(...args);
-const instance = (ref, ...args) => define("instance", value => value instanceof ref)(...args);
-const enums = (values, ...args) => define("enums", value => values.includes(value))(...args);
-const optional = (schema, ...args) => define("optional", v => v === undefined || schema(v).length === 0)(...args);
-const nullable = (schema, ...args) => define("nullable", v => v === null || schema(v).length === 0)(...args);
-// Complex types
-const custom = (validate, message = "Invalid value", ...validations) => define("", validate)(message, ...validations);
-const record = (keySchema, valueSchema, message = "", validations = []) =>
-  define("record", value => value !== null && typeof value === "object" && !Array.isArray(value))(
-    message,
-    [
-      (value, path) => Object.entries(value).flatMap(([key, val]) => [
-        ...keySchema(key, `${path}${path ? '.' : ''}${key}`, 'key'),
-        ...valueSchema(val, `${path}${path ? '.' : ''}${key}`)
-      ]),
-      ...validations,
-    ]
-  );
-const map = (keySchema, valueSchema, message = '', validations = []) =>
-  define("map", value => value instanceof Map)(
-    message,
-    [
-      (value, path) =>
-        [...value].flatMap(([key, val], index) => [
-          ...keySchema(key, `${path}[${index}]`, 'key'),
-          ...valueSchema(val, `${path}[${index}]`)
-        ]),
-      ...validations
-    ]
-  );
-const array = (schema, message = "", validations = []) =>
-  define("array", Array.isArray)(
-    message,
-    [
-      (value, path) =>
-        value.flatMap((item, index) =>
-          schema(item, `${path}[${index}]`)
-        ),
-      ...validations
-    ]
-  );
-const set = (schema, message = "", validations = []) =>
-  define("set", value => value instanceof Set)(
-    message,
-    [
-      (value, path) =>
-        [...value].flatMap((item, index) =>
-          schema(item, `${path}[${index}]`)
-        ),
-      ...validations
-    ]
-  );
-const object = (schema, message = "", validations = [], exact = false) =>
-  define("object", value => value !== null && typeof value === "object" && !Array.isArray(value))(
-    message,
-    [
-      (value, path) => {
-        const extraKeys = exact ? Object.keys(value).filter(key => !Object.keys(schema).includes(key)) : [];
-        return extraKeys.length ? [{ message: `Unexpected keys found: ${extraKeys.join(', ')}`, expected: "object", received: value, path, origin: 'key' }]
-          : Object.keys(schema).flatMap(key => schema[key](value[key], `${path}${path ? '.' : ''}${key}`));
-      },
-      ...validations
-    ]
-  );
-const strict = (schema, message = "", validations = []) =>
-  object(schema, message, validations, true);
-const tuple = (schemas, message = "", validations = []) => define("tuple", value => Array.isArray(value))(
+// uvld — tiny, zero-dependency schema validation.
+//
+// A validator is `(value, context) => Result`, where Result is an array of
+// Issue objects (empty === valid). Refinements may also return true/false,
+// a message string, or a partial Issue; `call()` normalises all of them.
+// Context carries the path, value origin, depth guard and (implicitly) the
+// transformed output.
+
+const ROOT = { path: '', origin: 'value', depth: 0 };
+let out; // root transform result, saved/restored by evaluate()
+
+// Precise, cross-realm type names: null, array, date, map, set, promise, ...
+const typeOf = v => v === null ? 'null'
+  : typeof v !== 'object' ? typeof v
+    : Object.prototype.toString.call(v).slice(8, -1).toLowerCase();
+
+// Bracket-quoted segments: a key containing dots can never look like a path.
+const seg = (c, key, origin) => ({
+  ...c,
+  path: c.path + '[' + (typeof key === 'number' ? key : JSON.stringify(String(key))) + ']',
+  origin,
+  depth: c.depth + 1
+});
+
+const issue = (message, expected, value, c) => ({
   message,
-  [
-    (value, path) => value.length !== schemas.length
-      ? [{ message: `Expected tuple of length ${schemas.length}, received ${value.length}`, expected: "tuple", received: value.length, path }]
-      : schemas.flatMap((schema, index) => schema(value[index], `${path}[${index}]`)),
-    ...validations
-  ]
-);
-// Utility functions
-const min = (minValue, ...args) =>
-  define("min", value => Array.isArray(value) || typeof value === "string" ? value.length >= minValue : (value instanceof Map || value instanceof Set) ? value.size >= minValue : value >= minValue)(`Min ${minValue}`, ...args);
-const max = (maxValue, ...args) =>
-  define("max", value => Array.isArray(value) || typeof value === "string" ? value.length <= maxValue : (value instanceof Map || value instanceof Set) ? value.size <= maxValue : value <= maxValue)(`Max ${maxValue}`, ...args);
-const or = (...schemas) => (value, path) => {
-  const issues = schemas.map(schema => schema(value, path)).flat();
-  return issues.length === schemas.length ? issues : [];
+  expected,
+  received: typeOf(value), // type tag only — raw values never enter errors
+  path: c.path,
+  origin: c.origin
+});
+
+const fix = (r, value, c) => ({
+  ...issue('Invalid value', 'unknown', value, c),
+  ...(typeof r === 'string' ? { message: r } : r && typeof r === 'object' ? r : {})
+});
+
+// Normalise anything a validator/refinement returns into Issue[]. Internal
+// validators always return Issue[]; refinements may return true/false/string/
+// partial issue.
+const call = (s, value, c) => {
+  const r = s(value, c);
+  return Array.isArray(r) ? r : r == null || r === true ? [] : [fix(r, value, c)];
 };
-const and = (...schemas) => (value, path) => schemas.flatMap(schema => schema(value, path));
-const lazy = (resolveSchema) => (value, path) => resolveSchema()(value, path);
-const transform = (schema, transformer) => (value) => schema(transformer(value));
-// const transform = (schema, transformer, transformedValue) => (value) => (transformedValue = transformer(value), schema(transformedValue));
-const not = (schema, message = '') => define("not", value => !is(schema, value))(message);
+
+// Uniform signature for the whole API:
+//   factory(message?: string, validations?: Validator[]): Validator
+const define = (type, validate) => (message = '', validations = []) => (value, c = ROOT) => {
+  if (c.depth > 64) return [issue('Too deep', type, value, c)];
+  if (!validate(value, c)) return [issue(message || `Expected ${type}, got ${typeOf(value)}`, type, value, c)];
+  return validations.flatMap(v => call(v, value, c));
+};
+
+// --- primitives -----------------------------------------------------------
+const string = define('string', v => typeof v === 'string');
+const boolean = define('boolean', v => typeof v === 'boolean');
+const number = define('number', v => typeof v === 'number' && Number.isFinite(v));
+const func = define('function', v => typeof v === 'function');
+const symbol = define('symbol', v => typeof v === 'symbol');
+const bigint = define('bigint', v => typeof v === 'bigint');
+const integer = define('integer', Number.isInteger);
+const date = define('date', v => v instanceof Date && !Number.isNaN(v.getTime()));
+const promise = define('promise', v => v != null && typeof v.then === 'function');
+const never = define('never', () => false);
+const any = define('any', () => true);
+const unknown = define('unknown', () => true);
+const nullish = define('nullish', v => v == null);
+
+// --- literals, classes, enums ---------------------------------------------
+const literal = (v, message = '', validations = []) =>
+  define('literal', x => Object.is(x, v))(message || `Expected ${String(v)}`, validations);
+
+const instance = (ref, message = '', validations = []) => {
+  if (typeof ref !== 'function' || !ref.prototype) throw new TypeError('Bad class');
+  return define('instance', v => v instanceof ref)(message, validations);
+};
+
+const enums = (values, message = '', validations = []) => {
+  if (!Array.isArray(values)) throw new TypeError('Bad enum');
+  return define('enums', v => values.includes(v))(message, validations);
+};
+
+// --- wrappers --------------------------------------------------------------
+// Nested issues are preserved; only an explicit message overrides them.
+const wrap = (schema, message, validations, skip) => (value, c = ROOT) => {
+  if (skip(value)) return [];
+  const issues = [call(schema, value, c), ...validations.map(v => call(v, value, c))].flat();
+  return message ? issues.map(i => ({ ...i, message })) : issues;
+};
+const optional = (schema, message = '', validations = []) => wrap(schema, message, validations, v => v === undefined);
+const nullable = (schema, message = '', validations = []) => wrap(schema, message, validations, v => v === null);
+
+const custom = (validate, message = 'Invalid value', validations = []) =>
+  define('custom', (v, c) => validate(v, c))(message, validations);
+
+// --- composites ------------------------------------------------------------
+const items = (schema, value, c) =>
+  [...value].flatMap((item, i) => call(schema, item, seg(c, i, 'value')));
+
+// Shared by record (own keys, incl. symbols) and map (entries).
+const pairs = (keySchema, valueSchema, value, c, isMap) =>
+  (isMap ? [...value] : Reflect.ownKeys(value).map(k => [k, value[k]]))
+    .flatMap(([k, v], i) => {
+      const at = isMap ? i : k;
+      return [
+        ...call(keySchema, k, seg(c, at, 'key')),
+        ...call(valueSchema, v, seg(c, at, 'value'))
+      ];
+    });
+
+const array = (schema, message = '', validations = []) =>
+  define('array', Array.isArray)(message, [(value, c) => items(schema, value, c), ...validations]);
+const set = (schema, message = '', validations = []) =>
+  define('set', v => typeOf(v) === 'set')(message, [(value, c) => items(schema, value, c), ...validations]);
+const record = (keySchema, valueSchema, message = '', validations = []) =>
+  define('record', v => typeOf(v) === 'object')(message, [(value, c) => pairs(keySchema, valueSchema, value, c, false), ...validations]);
+const map = (keySchema, valueSchema, message = '', validations = []) =>
+  define('map', v => typeOf(v) === 'map')(message, [(value, c) => pairs(keySchema, valueSchema, value, c, true), ...validations]);
+
+// Plain objects only; own properties only (the prototype chain cannot satisfy
+// a key); symbol keys are supported; extra keys reported together with field
+// errors instead of short-circuiting.
+const object = (schema, message = '', validations = [], exact = false) =>
+  define('object', v => typeOf(v) === 'object')(message, [
+    (value, c) => {
+      const keys = Reflect.ownKeys(schema);
+      const extra = exact ? Reflect.ownKeys(value).filter(k => !keys.includes(k)) : [];
+      return [
+        ...(extra.length
+          ? [issue(`Extra keys: ${extra.map(String).join(', ')}`, 'object', value, { ...c, origin: 'key' })]
+          : []),
+        ...keys.flatMap(k => call(schema[k], Object.hasOwn(value, k) ? value[k] : undefined, seg(c, k, 'value')))
+      ];
+    },
+    ...validations
+  ]);
+const strict = (schema, message = '', validations = []) => object(schema, message, validations, true);
+
+const tuple = (schemas, message = '', validations = []) =>
+  define('tuple', Array.isArray)(message, [
+    (value, c) => value.length !== schemas.length
+      ? [issue(`Tuple length ${schemas.length} != ${value.length}`, 'tuple', value, c)]
+      : schemas.flatMap((s, i) => call(s, value[i], seg(c, i, 'value'))),
+    ...validations
+  ]);
+
+// --- constraints -----------------------------------------------------------
+const size = v => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' || Array.isArray(v)) return v.length;
+  const t = typeOf(v);
+  return t === 'map' || t === 'set' ? v.size : NaN; // unsupported -> NaN -> clean issue
+};
+const min = (bound, message = '', validations = []) =>
+  define('min', v => size(v) >= bound)(message || `Min ${bound}`, validations);
+const max = (bound, message = '', validations = []) =>
+  define('max', v => size(v) <= bound)(message || `Max ${bound}`, validations);
+
+// --- combinators -----------------------------------------------------------
+// Each branch is tested on its own result (never by counting issues), with
+// short-circuiting; all branch issues are aggregated on total failure.
+const or = (...schemas) => (value, c = ROOT) => {
+  const errors = [];
+  for (const s of schemas) {
+    const issues = call(s, value, c);
+    if (!issues.length) return [];
+    errors.push(...issues);
+  }
+  return schemas.length ? errors : [issue('No schemas', 'or', value, c)];
+};
+const and = (...schemas) => (value, c = ROOT) => schemas.flatMap(s => call(s, value, c));
+
+const not = (schema, message = '', validations = []) =>
+  define('not', (v, c) => call(schema, v, c).length > 0)(message, validations);
+
+const lazy = resolve => {
+  let schema;
+  return (value, c = ROOT) => (schema ||= resolve())(value, c); // resolved once
+};
+
+// At the root of parse/safeParse the transformed value is the returned data.
+// Nested transforms affect validation only (documented in the README).
+const transform = (schema, fn) => (value, c = ROOT) => {
+  const next = fn(value);
+  if (!c.path) out = { v: next };
+  return call(schema, next, c);
+};
+
+// --- entry points ----------------------------------------------------------
 class VError extends Error {
   constructor(message, issues = []) {
     super(message);
@@ -112,58 +194,43 @@ class VError extends Error {
     this.issues = issues;
   }
 }
-const is = (schema, value) => schema(value).length === 0;
-const parse = (schema, value) => {
-  const issues = schema(value);
-  if (issues.length) {
-    throw new VError((issues[0]?.message), issues)
+
+// Single evaluation path for is/parse/safeParse. Unexpected throws from user
+// validators become an issue, so `safeParse` is genuinely safe.
+const evaluate = (schema, value) => {
+  const previous = out;
+  out = undefined;
+  try {
+    const issues = call(schema, value, ROOT);
+    return { issues, data: out ? out.v : value };
+  } catch (error) {
+    return { issues: [issue(`Threw: ${error?.message || error}`, 'validator', value, ROOT)], data: value };
+  } finally {
+    out = previous;
   }
-  return value;
+};
+
+const is = (schema, value) => evaluate(schema, value).issues.length === 0;
+const parse = (schema, value) => {
+  const { issues, data } = evaluate(schema, value);
+  if (issues.length) throw new VError(issues[0].message, issues);
+  return data;
 };
 const safeParse = (schema, value) => {
-  const issues = schema(value);
-  if (issues.length) {
-    return { success: false, error: new VError(issues[0]?.message, issues) }
-  }
-  return { success: true, data: value }
+  const { issues, data } = evaluate(schema, value);
+  return issues.length
+    ? { success: false, error: new VError(issues[0].message, issues) }
+    : { success: true, data };
 };
 
 export {
-  string,
-  boolean,
-  number,
-  func,
-  symbol,
-  bigint,
-  integer,
-  date,
-  promise,
-  literal,
-  instance,
-  enums,
-  optional,
-  nullable,
-  never,
-  any,
-  unknown,
-  nullish,
-  custom,
-  record,
-  map,
-  array,
-  set,
-  object,
-  strict,
-  tuple,
-  min,
-  max,
-  or,
-  and,
-  lazy,
-  transform,
-  not,
-  is,
-  parse,
-  safeParse,
-  VError
-}
+  define,
+  string, boolean, number, func, symbol, bigint, integer, date, promise,
+  never, any, unknown, nullish,
+  literal, instance, enums,
+  optional, nullable, custom,
+  record, map, array, set, object, strict, tuple,
+  min, max,
+  or, and, not, lazy, transform,
+  is, parse, safeParse, VError
+};

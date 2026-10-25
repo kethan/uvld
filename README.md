@@ -4,7 +4,7 @@
 
 **uvld** validates unknown data in JavaScript and TypeScript: one small function per type, composed into schemas, with structured errors and static type inference.
 
-- **Zero runtime dependencies.** 38 core exports (~4.3 kB minified / ~1.9 kB gzip) plus **158 opt-in utilities** in `uvld/utils`, which never add a byte to the core.
+- **Zero runtime dependencies.** 38 core exports (~4.4 kB minified / ~1.9 kB gzip), **158 opt-in utilities** in `uvld/utils` and **21 await-aware exports** in `uvld/async`. Both extras are separate tree-shakeable entries that never bundle core code.
 - **Correct by default.** Finite numbers, own properties, symbol keys, safe unions, exception-safe parsing.
 - **TypeScript-first.** `Infer<typeof schema>`, a real `is()` type guard, declarations shipped with the package.
 - **Uniform API.** Every validator factory takes `(message?, validations?)`.
@@ -371,6 +371,88 @@ See [`examples/utils.mjs`](examples/utils.mjs) and
 
 ---
 
+## Async validation — `uvld/async`
+
+A third, optional entry point for validators that need `await` (database
+uniqueness checks, remote lookups, feature flags). It has its own await-aware
+kernel and imports the core as an external module, so the synchronous core
+bundles are unchanged. It ships as ESM + CJS with declarations and the same
+legacy `node10` shim as `uvld/utils`.
+
+```js
+import { string } from 'uvld';
+import { objectAsync, checkAsync, safeParseAsync } from 'uvld/async';
+
+const Signup = objectAsync({
+  email: string(),
+  handle: string()
+}, '', [
+  checkAsync(async v => !(await db.users.exists(v.email)), 'Email already registered')
+]);
+
+const result = await safeParseAsync(Signup, input);
+if (!result.success) console.log(result.error.issues);
+```
+
+All 21 exports:
+
+```text
+  andAsync arrayAsync checkAsync customAsync evaluateAsync
+  fallbackAsync isAsync messageAsync nullableAsync objectAsync
+  optionalAsync orAsync parseAsync pipeAsync rawCheckAsync
+  resolveAsync safeParseAsync strictAsync transformAsync tupleAsync
+  withTimeout
+```
+
+- **Entry points:** `parseAsync`, `safeParseAsync`, `isAsync`, `evaluateAsync`.
+  All accept an optional `{ timeout, signal }` as the third argument.
+- **Async-aware combinators:** `customAsync`, `objectAsync`, `strictAsync`,
+  `arrayAsync`, `tupleAsync`, `orAsync`, `andAsync`, `optionalAsync`,
+  `nullableAsync`. They accept ordinary synchronous `uvld` schemas as children —
+  so you can reuse everything from the core.
+- **Actions:** `checkAsync`, `rawCheckAsync`, `transformAsync`, `pipeAsync`,
+  `fallbackAsync`, `messageAsync`. `pipeAsync` mixes async transforms, async
+  checks, and the tagged transform actions / checks from `uvld/utils`, then
+  returns transformed data at the root.
+- **Helpers:** `resolveAsync` (deeply awaits promises inside plain
+  objects/arrays, leaving `Date`/`Map`/`Set` alone — precompute, then validate
+  synchronously with the core), `withTimeout` (bounds your own async work).
+
+### Decisions and caveats
+
+- **Rejections become issues**, matching the sync `safeParse` promise: a
+  rejected async validator yields `Threw: <message>` instead of an unhandled
+  rejection. `parseAsync` throws/rejects with `VError`.
+- **`orAsync` is sequential on purpose** — short-circuit means later branches
+  (which may hit a database) never run; total failure aggregates every branch's
+  issues. `objectAsync` uses `Promise.all`, which preserves schema key order, so
+  the first issue (and therefore `error.message`) stays deterministic.
+- **Cancellation:** `timeout` and `signal` bound the wait, but cannot cancel
+  in-flight work. Pass `context.signal` to your own `fetch`/db call, or wrap it
+  with `withTimeout(promise, ms, signal)`.
+- **`isAsync` is not a TypeScript type guard** — type guards are synchronous by
+  definition. Use an explicit type assertion if you need narrowing.
+- **Do not put an async refinement inside a synchronous schema's `validations`
+  array** (`string('', [checkAsync(...)])` will not be awaited). Use
+  `customAsync`, `objectAsync`, `pipeAsync` or `arrayAsync`, which do await.
+- Nested `pipeAsync`/`fallbackAsync` validate but do not rewrite the parent
+  object, exactly like the core's `transform`.
+
+### `Context.out` (fixed in 1.1.0)
+
+`Context` has always declared `out: { set: boolean; value: unknown }`, but 1.0.0
+never provided it at runtime. 1.1.0 implements it: `parse`/`safeParse` create a
+fresh per-evaluation context whose `out` is a shared box, `seg()` propagates the
+same reference to every child, and a root transform writes into it. This removes
+the module-level variable that would have raced under `await` — two overlapping
+`parseAsync` calls can no longer leak each other's transformed data. The sync
+core grew by 59 raw bytes for this correctness fix.
+
+See [`examples/async.mjs`](examples/async.mjs) and
+[`tests/async.spec.ts`](tests/async.spec.ts) (24 tests) for runnable coverage.
+
+---
+
 ## Browser / CDN
 
 ```html
@@ -391,20 +473,24 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 | Bundle | Raw | gzip | brotli |
 | --- | ---: | ---: | ---: |
-| `dist/index.js` (ESM) | 4,315 B | 1,895 B | 1,756 B |
-| `dist/index.cjs` (CJS) | 4,422 B | 1,830 B | 1,687 B |
-| `dist/index.min.js` (IIFE) | 4,229 B | 1,818 B | 1,677 B |
+| `dist/index.js` (ESM) | 4,374 B | 1,919 B | 1,774 B |
+| `dist/index.cjs` (CJS) | 4,481 B | 1,853 B | 1,706 B |
+| `dist/index.min.js` (IIFE) | 4,288 B | 1,835 B | 1,692 B |
 | `dist/utils.js` (ESM, opt-in) | 13,608 B | 5,073 B | 4,600 B |
 | `dist/utils.cjs` (CJS, opt-in) | 14,033 B | 4,916 B | 4,431 B |
+| `dist/async.js` (ESM, opt-in) | 5,815 B | 1,968 B | 1,782 B |
+| `dist/async.cjs` (CJS, opt-in) | 5,856 B | 1,911 B | 1,722 B |
 
-`uvld/utils` is a **separate entry point**: `dist/utils.js` imports the core as
-an external module (never duplicates it), so the core bundle above is
-byte-identical whether or not you use utilities. Bundlers tree-shake the named
-ESM exports, so you only pay for what you import.
+`uvld/utils` and `uvld/async` are **separate entry points**: each imports the
+core as an external module (never duplicates it), so the core stays a single
+~4.4 kB file. The 1.1.0 `Context.out` fix added 59 raw bytes to that file;
+importing the extras adds nothing. Bundlers tree-shake the named ESM exports,
+so you only pay for what you import.
 
-- Raw ESM bytes are **33% lower** than 0.0.1 (6,422 B unminified); there are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs), and the published tarball is smaller.
-- Compressed full-bundle size is slightly larger than the 0.0.1 minified CDN build (~1.27 kB gzip) because 1.0.0 fixes ~20 correctness defects, adds symbol-key/own-property handling, context propagation, exception safety and path encoding. The budget above stops it growing further.
-- Bundlers can tree-shake the ESM build — import only what you use. Validation is synchronous and allocation-light; no regexes, no async, no schema compilation step.
+- Raw ESM bytes are **32% lower** than 0.0.1 (6,422 B unminified); there are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs).
+- Compressed core size is slightly larger than the 0.0.1 minified CDN build (~1.27 kB gzip) because 1.0.0 fixes ~20 correctness defects — symbol-key/own-property handling, context propagation, exception safety and path encoding. The size budget stops it growing further.
+- The published tarball is larger than 0.0.1's because it now ships the utils + async bundles, their declarations and complete docs. The core bundle itself is still ~4.4 kB.
+- Bundlers can tree-shake the ESM builds. The core is synchronous and allocation-light with no schema compilation step; regex-heavy formats and async validation live only in the opt-in entries.
 - A depth guard (64 levels) prevents stack overflows on circular data.
 
 ---
@@ -432,9 +518,9 @@ ESM exports, so you only pay for what you import.
 
 ```bash
 npm ci
-npm test             # vitest run (158 tests)
+npm test             # vitest run (186 tests)
 npm run typecheck    # tsc --noEmit over source types, tests and examples
-npm run examples     # run all 9 runnable examples
+npm run examples     # run all 10 runnable examples
 npm run build        # ESM + CJS + IIFE bundles and dist/index.d.ts
 npm run size         # enforce the byte budget
 npm run smoke        # pack + install into a clean consumer; ESM/CJS/TS/IIFE checks

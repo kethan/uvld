@@ -9,6 +9,7 @@ import { run as errors } from './errors.mjs';
 import { run as transform } from './transform.mjs';
 import { run as records } from './records.mjs';
 import { run as utils } from './utils.mjs';
+import { run as asyncExample } from './async.mjs';
 
 const examples = [
   ['quickstart', quickstart],
@@ -19,12 +20,13 @@ const examples = [
   ['errors', errors],
   ['transform', transform],
   ['records', records],
-  ['utils', utils]
+  ['utils', utils],
+  ['async', asyncExample]
 ];
 
 for (const [name, run] of examples) {
   console.log(`\n=== ${name} ===`);
-  run();
+  await run();
 }
 
 console.log(`\n${examples.length} examples ran successfully.`);

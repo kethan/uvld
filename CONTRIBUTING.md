@@ -2,8 +2,9 @@
 
 Thanks for helping out. The core is one file: [`src/index.js`](src/index.js), with public
 types in [`src/index.d.ts`](src/index.d.ts). Optional utilities live in
-[`src/utils.js`](src/utils.js) / [`src/utils.d.ts`](src/utils.d.ts) and are built as a
-separate entry point. Both surfaces are kept in sync by [`tests/api.spec.ts`](tests/api.spec.ts).
+[`src/utils.js`](src/utils.js) / [`src/utils.d.ts`](src/utils.d.ts), and async
+validation lives in [`src/async.js`](src/async.js) / [`src/async.d.ts`](src/async.d.ts).
+All three are built as separate entry points that import the core externally. Both surfaces are kept in sync by [`tests/api.spec.ts`](tests/api.spec.ts).
 
 ## Setup
 

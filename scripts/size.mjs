@@ -7,12 +7,15 @@ import { gzipSync, brotliCompressSync } from 'node:zlib';
 
 const BUDGET = {
   // core (unchanged by the utils entry point)
-  'dist/index.js': { raw: 4350, gzip: 1900, brotli: 1765 },
+  'dist/index.js': { raw: 4450, gzip: 1950, brotli: 1790 },
   'dist/index.cjs': { raw: 4600, gzip: 1900, brotli: 1750 },
   'dist/index.min.js': { raw: 4400, gzip: 1900, brotli: 1750 },
   // optional utils entry point
   'dist/utils.js': { raw: 14200, gzip: 5300, brotli: 4800 },
-  'dist/utils.cjs': { raw: 14600, gzip: 5150, brotli: 4650 }
+  'dist/utils.cjs': { raw: 14600, gzip: 5150, brotli: 4650 },
+  // optional async entry point
+  'dist/async.js': { raw: 6200, gzip: 2100, brotli: 1900 },
+  'dist/async.cjs': { raw: 6250, gzip: 2050, brotli: 1850 }
 };
 
 let failed = false;

@@ -1,252 +1,318 @@
-# UVld Validation Library
+# UVld — tiny schema validation
 
-[![tests](https://github.com/kethan/uvld/actions/workflows/node.js.yml/badge.svg)](https://github.com/kethan/uvld/actions/workflows/node.js.yml) [![Version](https://img.shields.io/npm/v/uvld.svg?color=success&style=flat-square)](https://www.npmjs.com/package/uvld) [![Badge size](https://deno.bundlejs.com/badge?q=uvld&treeshake=[*]&config={"compression":"brotli"})](https://unpkg.com/uvld) [![Badge size](https://deno.bundlejs.com/badge?q=uvld&treeshake=[*]&config={"compression":"gzip"})](https://unpkg.com/uvld)
+[![tests](https://github.com/kethan/uvld/actions/workflows/node.js.yml/badge.svg)](https://github.com/kethan/uvld/actions/workflows/node.js.yml) [![Version](https://img.shields.io/npm/v/uvld.svg?color=success&style=flat-square)](https://www.npmjs.com/package/uvld) [![size](https://deno.bundlejs.com/badge?q=uvld&treeshake=[*]&config={"compression":"brotli"})](https://bundlejs.com/?q=uvld)
 
-This library provides a simple and extensible way to validate various data types and structures in JavaScript/TypeScript. It offers predefined validators for primitive types, custom validators, and combinators for complex validation logic. Additionally, it provides utility functions for parsing and safely parsing values based on schemas.
+**uvld** validates unknown data in JavaScript and TypeScript: one small function per type, composed into schemas, with structured errors and static type inference.
 
-## Features
+- **Zero runtime dependencies.** 38 named exports, ~4.3 kB minified / ~1.9 kB gzip.
+- **Correct by default.** Finite numbers, own properties, symbol keys, safe unions, exception-safe parsing.
+- **TypeScript-first.** `Infer<typeof schema>`, a real `is()` type guard, declarations shipped with the package.
+- **Uniform API.** Every validator factory takes `(message?, validations?)`.
 
-- Type Definitions: Simple type validators for primitive types like string, number, boolean, and more.
-- Complex Structures: Support for validating complex structures like objects, arrays, maps, sets, and tuples.
-- Custom Validators: Create custom validation logic to handle unique validation needs.
-- Error Handling: Graceful error handling with detailed messages and issue tracking.
-- Utility Functions: Includes utility functions for minimum/maximum constraints and logical operations on schemas (AND/OR).
-- Type Inference: Automatically infer TypeScript types from schemas for better type safety in TypeScript projects.
+> Requires Node >= 20 (or any modern browser). ESM, CommonJS and a `<script>` build are all shipped.
 
-## Installation
+---
 
-Install the module using npm:
+## Quickstart
 
-**yarn**: `yarn add uvld`
-
-**npm**: `npm i uvld`
-
-**cdn**: https://esm.sh/uvld
-
-## Usage
-
-### Basic Validation
-
-You can validate various primitive types using predefined validators:
-
-```javascript
-import { string, number, boolean, is } from "uvld";
-
-const isString = string();
-const isNumber = number();
-const isBoolean = boolean();
-
-console.log(is(isString, "Hello")); // true
-console.log(is(isNumber, 42)); // true
-console.log(is(isBoolean, true)); // true
+```bash
+npm i uvld        # or: yarn add uvld / pnpm add uvld
 ```
 
-### Validation with Custom Messages
+```js
+import { object, string, number, is, parse, safeParse } from 'uvld';
 
-You can provide custom error messages when the validation fails:
+const User = object({ name: string(), age: number() });
 
-```javascript
-const isString = string("This must be a string");
-const isValid = is(isString, 123); // false
+is(User, { name: 'Ada', age: 36 });            // true
+const user = parse(User, { name: 'Ada', age: 36 }); // { name: 'Ada', age: 36 }
+
+const result = safeParse(User, { name: 'Ada', age: '36' });
+if (!result.success) {
+  console.log(result.error.message);            // "Expected number, got string"
+  console.log(result.error.issues[0].path);     // '["age"]'
+}
 ```
 
-### Validation with Custom Messages and Additional Validations
+`parse` throws a `VError`; `safeParse` returns `{ success: true, data }` or `{ success: false, error }`; `is` returns a boolean (and narrows in TypeScript).
 
-Most validators support a `message` and an optional `validations` array. These allow you to specify a custom error message and add additional validation logic:
+---
 
-```javascript
-const isString = string("This must be a string");
-const isValid = is(isString, 123); // false
-```
+## Core concepts
 
-You can also add extra validation steps using the `validations` array:
+A **validator** is a function `(value, context?) => Issue[]`. An empty array means valid. Schemas compose because every factory returns a validator.
 
-```javascript
-const isStringWithLength = string("Invalid string", [
-	(value) =>
-		value.length > 5 || { message: "String must be longer than 5 characters" },
+```js
+import { string, min, max, custom, object, array } from 'uvld';
+
+const password = string('Password required', [
+  min(8, 'At least 8 characters'),
+  max(72, 'Too long'),
+  v => /[0-9]/.test(v) || 'Add a number'
 ]);
 
-console.log(is(isStringWithLength, "Short")); // false
+const Signup = object({ email: string(), password, tags: array(string()) }, 'Invalid signup', [
+  form => form.tags.length < 5 || 'At most 5 tags'
+]);
 ```
 
-### Parsing and Safe Parsing
+The **uniform signature** is `factory(..., message?: string, validations?: Validator[])`:
 
-Use `parse` to validate a value and throw an error if validation fails:
+- `message` replaces the default error text when the type check fails.
+- `validations` is an array of extra validators/refinements. A refinement may return `true`, `false`, a message string, a partial `Issue`, or an `Issue[]`. Anything else is normalised into a proper issue.
+- `custom(predicate, message?, validations?)` and `define(type, predicate)` let you add your own validators with the same shape.
 
-```javascript
-import { parse, string } from "uvld";
+```js
+import { custom, define } from 'uvld';
+
+const even = custom(v => v % 2 === 0, 'Must be even');
+const uuid = define('uuid', v => typeof v === 'string' && v.length === 36);
+const id = uuid('Not a UUID');
+```
+
+---
+
+## API reference
+
+### Primitives
+
+| Export | Validates |
+| --- | --- |
+| `string` | `typeof === 'string'` |
+| `number` | finite number (rejects `NaN`, `Infinity`, `-Infinity`) |
+| `boolean` | `typeof === 'boolean'` |
+| `bigint` | `typeof === 'bigint'` |
+| `symbol` | `typeof === 'symbol'` |
+| `func` | `typeof === 'function'` |
+| `integer` | `Number.isInteger` |
+| `date` | a valid `Date` (invalid dates rejected) |
+| `promise` | a `Promise` or any thenable |
+| `nullish` | `null` or `undefined` |
+| `any` | anything |
+| `unknown` | anything (typed as `unknown`) |
+| `never` | nothing (always fails) |
+
+### Literals, classes, enums
+
+| Export | Description |
+| --- | --- |
+| `literal(value, message?, validations?)` | strict identity via `Object.is` — `literal(NaN)` works |
+| `instance(Class, message?, validations?)` | `instanceof`; throws `TypeError` for a non-class argument |
+| `enums(values, message?, validations?)` | membership via `Array.includes` (SameValueZero, so `NaN` works); requires an array |
+
+### Wrappers
+
+| Export | Description |
+| --- | --- |
+| `optional(schema, message?, validations?)` | accepts `undefined`; otherwise delegates and **keeps** nested issues |
+| `nullable(schema, message?, validations?)` | accepts `null`; otherwise delegates and keeps nested issues |
+| `custom(predicate, message?, validations?)` | arbitrary validation logic |
+| `define(type, predicate)` | returns a validator factory with the same `(message?, validations?)` signature |
+
+### Composites
+
+| Export | Description |
+| --- | --- |
+| `object(shape, message?, validations?, exact?)` | plain objects, **own** properties only; extra keys allowed by default |
+| `strict(shape, message?, validations?)` | `object(..., exact = true)` — reports unknown keys (including symbols) *and* field errors |
+| `array(schema, message?, validations?)` | arrays; paths use `[index]` |
+| `tuple(schemas, message?, validations?)` | fixed-length arrays with per-position schemas |
+| `record(keySchema, valueSchema, message?, validations?)` | dictionaries; validates **string and symbol** keys and values |
+| `map(keySchema, valueSchema, message?, validations?)` | `Map` entries (key/value schemas) |
+| `set(schema, message?, validations?)` | `Set` members |
+
+### Constraints and combinators
+
+| Export | Description |
+| --- | --- |
+| `min(bound, message?, validations?)` | number >= bound, or `length`/`size` >= bound for string/array/`Map`/`Set` |
+| `max(bound, message?, validations?)` | number <= bound, or `length`/`size` <= bound |
+| `or(...schemas)` | passes if **any** branch passes; short-circuits; aggregates all issues when all fail |
+| `and(...schemas)` | passes only if every schema passes; collects all issues |
+| `not(schema, message?, validations?)` | inverts a schema |
+| `lazy(() => schema)` | deferred/recursive schemas; resolved once |
+| `transform(schema, fn)` | validates `fn(value)`; at the root, `parse`/`safeParse` return `fn(value)` (applied once) |
+
+### Entry points and errors
+
+| Export | Description |
+| --- | --- |
+| `is(schema, value)` | `boolean`; TypeScript type guard `value is T`; never throws |
+| `parse(schema, value)` | returns the value, or throws `VError` |
+| `safeParse(schema, value)` | `{ success: true, data }` or `{ success: false, error: VError }`; never throws |
+| `VError` | `Error` subclass with `issues: Issue[]` |
+
+Exported types: `Issue`, `Context`, `Origin`, `Validator`, `Refinement`, `RefinementResult`, `ValidationResult`, `Infer`, `InferShape`, `UnionToIntersection`, `ValidatorFactory`, `SafeParseReturn`.
+
+---
+
+## Error handling
+
+Every failure produces a well-formed issue:
+
+```js
+{
+  message: 'Expected number, got string',
+  expected: 'number',        // what the schema wanted
+  received: 'string',        // a type tag — never the raw value, so secrets stay out of logs
+  path: '["user"]["tags"][1]',
+  origin: 'value'            // 'value' for data, 'key' for record/map keys
+}
+```
+
+- Paths are unambiguous bracket segments: `["a.b"][0]` cannot be confused with `["a"]["b"]`.
+- The root path is `""`.
+- `VError.message` is the first issue's message; `VError.issues` holds all of them.
+- Unexpected exceptions inside user validators are converted into an issue (`Threw: ...`), so `safeParse` never crashes your process.
+
+```js
+import { VError, parse, string } from 'uvld';
 
 try {
-	parse(string(), 42); // Throws an error
+  parse(string(), 42);
 } catch (err) {
-	console.error(err.message); // Expected string, received number
+  if (err instanceof VError) console.table(err.issues);
 }
 ```
 
-For safe validation, use `safeParse`:
+---
 
-```javascript
-const result = safeParse(string(), 42);
-if (!result.success) {
-	console.error(result.error.message); // Expected string, received number
-}
-```
+## TypeScript
 
-### Custom Validation
+Declarations ship inside the package; no `@types/...` install needed.
 
-You can create custom validation logic using the `custom` validator:
+```ts
+import { object, string, number, array, optional, or, parse, safeParse, is, type Infer } from 'uvld';
 
-```javascript
-import { custom } from "uvld";
-
-const isEven = custom((value) => value % 2 === 0, "Must be an even number");
-
-console.log(is(isEven, 4)); // true
-console.log(is(isEven, 3)); // false
-```
-
-### Complex Types
-
-#### Object Validation
-
-You can validate objects with specific schemas:
-
-```javascript
-import { object, string, number } from "uvld";
-
-const schema = object({
-	name: string(),
-	age: number(),
+const User = object({
+  name: string(),
+  age: number(),
+  tags: array(string()),
+  bio: optional(string())
 });
 
-parse(schema, { name: "John", age: 30 }); // Passes validation
-```
+type User = Infer<typeof User>;
+// { name: string; age: number; tags: string[]; bio: string | undefined }
 
-#### Arrays, Tuples, and Records
+const Id = or(string(), number());
+type Id = Infer<typeof Id>; // string | number
 
-You can validate arrays, tuples, and records:
+let value: unknown = 'hello';
+if (is(string(), value)) {
+  value.toUpperCase(); // value is narrowed to string
+}
 
-```javascript
-import { array, tuple, record, string, number } from "uvld";
-
-const stringArray = array(string());
-const numberTuple = tuple([number(), number()]);
-const stringNumberRecord = record(string(), number());
-
-parse(stringArray, ["hello", "world"]); // Passes validation
-parse(numberTuple, [1, 2]); // Passes validation
-parse(stringNumberRecord, { a: 1, b: 2 }); // Passes validation
-```
-
-### Additional Features
-
-#### Optional and Nullable
-
-You can mark values as optional or nullable:
-
-```javascript
-import { optional, nullable, string } from "uvld";
-
-const optionalString = optional(string());
-const nullableString = nullable(string());
-
-parse(optionalString, undefined); // Passes validation
-parse(nullableString, null); // Passes validation
-```
-
-#### Combinators: `and`, `or`, `not`
-
-Combine validators using `and`, `or`, or `not`:
-
-```javascript
-import { and, or, not, string, number } from "uvld";
-
-const stringOrNumber = or(string(), number());
-
-console.log(is(stringOrNumber, "Hello")); // true
-console.log(is(stringOrNumber, 42)); // true
-console.log(is(stringOrNumber, true)); // false
-```
-
-#### Min/Max Validation
-
-You can validate minimum and maximum constraints for strings, arrays, and numbers:
-
-```javascript
-import { min, max, string } from "uvld";
-
-parse(min(5), "Hello"); // Passes validation
-parse(max(10), "Hello World"); // Fails validation
-```
-
-## Error Handling
-
-All validation errors are wrapped in a custom `VError` class, which includes detailed information about the issues:
-
-```javascript
-import { parse, string, VError } from "uvld";
-
-try {
-	parse(string(), 42);
-} catch (err) {
-	if (err instanceof VError) {
-		console.error(err.issues); // Array of issues with detailed information
-	}
+const result = safeParse(User, data);
+if (!result.success) {
+  result.error.issues[0].path; // string
 }
 ```
 
-## API Reference
+`Infer` also works for `tuple`, `literal`, `enums`, `instance`, `record`, `map`, `set`, `and` and `transform`. See [`examples/typescript.ts`](examples/typescript.ts) and the checked type tests in [`tests/types.check.ts`](tests/types.check.ts).
 
-### Validators
+---
 
-Each validator can take two optional parameters:
+## Use cases
 
-- `message` (optional): Custom error message when the validation fails.
-- `validations` (optional): An array of additional validation functions for more granular checks.
+Runnable, assert-based examples live in [`examples/`](examples/). Run them all with `npm run examples`.
 
-- `string(message = '', validations = [])`: Validates that the value is a string.
-- `number(message = '', validations = [])`: Validates that the value is a number.
-- `boolean(message = '', validations = [])`: Validates that the value is a boolean.
-- `func(message = '', validations = [])`: Validates that the value is a function.
-- `symbol(message = '', validations = [])`: Validates that the value is a symbol.
-- `bigint(message = '', validations = [])`: Validates that the value is a bigint.
-- `integer(message = '', validations = [])`: Validates that the value is an integer.
-- `date(message = '', validations = [])`: Validates that the value is a Date object.
-- `promise(message = '', validations = [])`: Validates that the value is a Promise.
-- `literal(value, message = '', validations = [])`: Validates that the value matches the specified literal.
-- `instance(ref, message = '', validations = [])`: Validates that the value is an instance of the given class.
-- `enums(values, message = '', validations = [])`: Validates that the value is one of the specified values.
-- `optional(schema, message = '', validations = [])`: Marks a schema as optional.
-- `nullable(schema, message = '', validations = [])`: Marks a schema as nullable.
-- `record(keySchema, valueSchema, message = '', validations = [])`: Validates an object where keys and values match specific schemas.
-- `map(keySchema, valueSchema, message = '', validations = [])`: Validates a Map object.
-- `array(schema, message = '', validations = [])`: Validates an array of items matching the schema.
-- `set(schema, message = '', validations = [])`: Validates a Set of items matching the schema.
-- `object(schema, message = '', validations = [], exact = false)`: Validates an object with the given schema.
-- `strict(schema, message = '', validations = [])`: Strictly validates an object, disallowing extra keys.
-- `tuple(schemas, message = '', validations = [])`: Validates a tuple of values matching the given schemas.
+| Example | What it shows |
+| --- | --- |
+| [`quickstart.mjs`](examples/quickstart.mjs) | `is` / `parse` / `safeParse`, first schema |
+| [`forms.mjs`](examples/forms.mjs) | sign-up form: friendly messages, refinements, cross-field rules |
+| [`api.mjs`](examples/api.mjs) | API payloads: nested `strict` objects, enums, arrays, tuples, unions |
+| [`custom.mjs`](examples/custom.mjs) | `define`, `custom`, `and`, `or`, `not`, slug validation |
+| [`recursive.mjs`](examples/recursive.mjs) | `lazy` trees, nested error paths, circular input |
+| [`errors.mjs`](examples/errors.mjs) | issue shape, `VError`, trapped validator exceptions |
+| [`transform.mjs`](examples/transform.mjs) | trimming/coercion with `transform` |
+| [`records.mjs`](examples/records.mjs) | records, symbol keys, `Map`, `Set`, nested arrays |
+| [`typescript.ts`](examples/typescript.ts) | static inference (compile-only) |
 
-### Combinators and Utilities
+A few compact recipes:
 
-- `min(minValue, message = '', validations = [])`: Validates that the value meets the minimum requirement.
-- `max(maxValue, message = '', validations = [])`: Validates that the value meets the maximum requirement.
-- `or(...schemas)`: Validates that the value matches at least one of the provided schemas.
-- `and(...schemas)`: Validates that the value matches all of the provided schemas.
-- `not(schema, message = '', validations = [])`: Validates that the value does not match the provided schema.
-- `lazy(resolveSchema)`: Lazily resolves a schema.
-- `transform(schema, transformer)`: Transforms the value before validation.
+```js
+// Config with defaults enforced at the boundary
+const Config = object({ host: string(), port: number('port must be a number', [min(1), max(65535)]) });
 
-### Utility Functions
+// Recursive tree
+const Node = object({ id: number(), children: array(lazy(() => Node)) });
 
-- `is(schema, value)`: Returns `true` if the value passes the schema validation.
-- `parse(schema, value)`: Validates the value and throws an error if validation fails.
-- `safeParse(schema, value)`: Validates the value and returns a result object with either `success: true` or `success: false`.
+// Unions that actually work with multi-error branches
+const Payload = or(object({ kind: literal('a'), a: string() }), object({ kind: literal('b'), b: number() }));
 
-### Custom Error Class
+// Reject unknown keys (including symbols)
+const Body = strict({ token: string(), amount: number() });
+```
 
-- `VError`: Custom error class for validation errors.
+---
+
+## Browser / CDN
+
+```html
+<script src="https://unpkg.com/uvld/dist/index.min.js"></script>
+<script>
+  const { string, safeParse } = uvld;
+  console.log(safeParse(string(), 'hi'));
+</script>
+```
+
+Or use an ESM CDN: `https://esm.sh/uvld`. CommonJS works too: `const { string } = require('uvld');`.
+
+---
+
+## Size & performance
+
+All shipped bundles are minified. `npm run size` enforces the budget in CI.
+
+| Bundle | Raw | gzip | brotli |
+| --- | ---: | ---: | ---: |
+| `dist/index.js` (ESM) | 4,315 B | 1,895 B | 1,756 B |
+| `dist/index.cjs` (CJS) | 4,422 B | 1,830 B | 1,687 B |
+| `dist/index.min.js` (IIFE) | 4,229 B | 1,818 B | 1,677 B |
+
+- Raw ESM bytes are **33% lower** than 0.0.1 (6,422 B unminified); there are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs), and the published tarball is smaller.
+- Compressed full-bundle size is slightly larger than the 0.0.1 minified CDN build (~1.27 kB gzip) because 1.0.0 fixes ~20 correctness defects, adds symbol-key/own-property handling, context propagation, exception safety and path encoding. The budget above stops it growing further.
+- Bundlers can tree-shake the ESM build — import only what you use. Validation is synchronous and allocation-light; no regexes, no async, no schema compilation step.
+- A depth guard (64 levels) prevents stack overflows on circular data.
+
+---
+
+## Migration from 0.0.1
+
+1.0.0 is intentionally a breaking release. See [`CHANGELOG.md`](CHANGELOG.md) for the full list. The pre-1.0.0 audit that motivated these changes is preserved in [`ANALYSIS.md`](ANALYSIS.md).
+
+| 0.0.1 | 1.0.0 |
+| --- | --- |
+| `literal(1, 'msg', validator)` | `literal(1, 'msg', [validator])` — uniform `validations` array |
+| `min(5, 'msg')` threw on valid input | `min(5, 'msg')` works; signature is `(bound, message?, validations?)` |
+| `err.issues[0].received` = raw value | `received` = type tag string |
+| `err.issues[0].path = 'a.b'` | `path = '["a"]["b"]'` |
+| `Expected string, received number` | `Expected string, got number` |
+| `require('uvld')` resolved to an ESM file | resolves to `dist/index.cjs` |
+| `object({})` accepted `Date`/`Map`/`Set` | rejects non-plain objects |
+| `number()` accepted `NaN` | rejects non-finite numbers |
+| `transform()` never changed the output | root transforms return transformed data |
+| `define` typed but missing; `unknown` exported but untyped | both aligned |
+
+---
+
+## Development
+
+```bash
+npm ci
+npm test             # vitest run (56 tests)
+npm run typecheck    # tsc --noEmit over source types, tests and examples
+npm run examples     # run all 8 runnable examples
+npm run build        # ESM + CJS + IIFE bundles and dist/index.d.ts
+npm run size         # enforce the byte budget
+npm run smoke        # pack + install into a clean consumer; ESM/CJS/TS/IIFE checks
+npm run check        # all of the above in order
+```
+
+CI runs on Node 20 and 22 and also performs `npm audit --audit-level=moderate` (currently 0 advisories). See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution checklist and [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+---
 
 ## License
 
-This project is licensed under the MIT License.
+[ISC](LICENSE) © Kethan Surana. (0.0.1's README said MIT while the manifest said ISC; 1.0.0 ships a real `LICENSE` file matching the manifest.)

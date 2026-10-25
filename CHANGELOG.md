@@ -1,0 +1,73 @@
+# Changelog
+
+## 1.0.0 (2026-10-25)
+
+Production release. Same tiny idea, but the validation semantics, TypeScript
+surface and package layout are now reliable. **Breaking changes vs 0.0.1.**
+
+### Fixed (correctness)
+
+- `or()` no longer counts issues: each branch is tested on its own result,
+  short-circuits, aggregates branch issues, and `or()` with no branches fails.
+- `record()` now validates symbol keys (it used `Object.entries`, which skipped
+  them entirely) and rejects non-plain objects.
+- `object()` / `strict()` use own properties only (the prototype chain can no
+  longer satisfy a key), accept symbol keys in schemas, and reject `Date`,
+  `Map`, `Set`, `Promise` and arrays. `strict()` reports extra keys *and* field
+  errors instead of short-circuiting.
+- `min()` / `max()` take `(bound, message?, validations?)`; a custom message no
+  longer throws `validations.flatMap is not a function`. Unsupported inputs
+  produce a clean issue instead of raw JS coercion or a `TypeError`.
+- `number()` rejects `NaN`/`±Infinity`; `date()` rejects invalid dates;
+  `promise()` accepts thenables; `literal()` uses `Object.is` (so `NaN` works);
+  `enums()` and `instance()` validate their arguments up front.
+- `optional()` / `nullable()` preserve nested issues (paths, origins, count)
+  instead of replacing them with a generic error.
+- `transform()` returns the transformed value at the root of `parse` /
+  `safeParse`, applied exactly once.
+- `safeParse()` / `is()` never throw: exceptions from user validators become
+  issues. Circular/deep input is bounded by a depth guard.
+- Issues are always well-formed `Issue` objects, even when a refinement returns
+  `false`, a string, or a partial object. `origin` propagates through every
+  combinator. `received` is a type tag, never the raw value (no secrets in logs).
+- Paths use unambiguous bracket segments, e.g. `["user"]["tags"][0]`.
+
+### Fixed (TypeScript & packaging)
+
+- `define` is now exported at runtime and `unknown` is declared in the types;
+  runtime exports and declarations are checked against each other in CI.
+- `types` points at the real `dist/index.d.ts`; `exports` has a `types`
+  condition first and a reachable `require` condition pointing at a real
+  `.cjs` file. `module` points at ESM, `main` at CJS.
+- `is()` is a type guard; `Infer` works for objects, tuples, unions, literals
+  and enums; `object()` no longer adds an `any` index signature.
+- The abandoned `src/try.ts` prototype (18 type errors, conflicting `Issue`
+  shape) was removed.
+
+### Changed / added
+
+- **Uniform signature for every validator factory:**
+  `factory(..., message?: string, validations?: Validator[])`.
+- Zero runtime dependencies (the build-size plugin moved to dev tooling).
+- Three minified bundles (ESM, CJS, IIFE) instead of four; UMD dropped.
+- `npm run typecheck`, `size`, `smoke`, `examples`, `check`; enforced byte
+  budget; consumer smoke test for ESM/CJS/TypeScript across three resolution
+  modes; CI on Node 20/22 with a dependency audit.
+- 8 runnable, assert-based examples and a 56-test suite covering every
+  regression above.
+- `LICENSE` (ISC) added; README now matches `package.json`. Node >= 20.
+
+### Migration notes
+
+| 0.0.1 | 1.0.0 |
+| --- | --- |
+| `min(5, 'msg')` | same call now works (was treated as `validations`) |
+| `literal(1, 'msg', validator)` | `literal(1, 'msg', [validator])` |
+| `custom(fn, 'msg', validator)` | `custom(fn, 'msg', [validator])` |
+| `err.issues[0].received` = raw value | `received` = type tag string |
+| `err.issues[0].path = 'a.b'` | `path = '["a"]["b"]'` |
+| message `Expected string, received number` | `Expected string, got number` |
+| `require('uvld')` resolved to ESM | resolves to `dist/index.cjs` |
+| `object({})` accepted `Date`/`Map`/`Set` | rejects non-plain objects |
+| `number()` accepted `NaN` | rejects non-finite numbers |
+| `transform()` output unchanged | root transform returns transformed data |

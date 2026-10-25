@@ -1,385 +1,439 @@
-import { expect, describe, test } from 'vitest'
-
+import { describe, expect, test, vi } from 'vitest';
+import * as uvld from './src';
 import {
-  string,
-  boolean,
-  number,
-  func,
-  symbol,
-  bigint,
-  integer,
-  date,
-  promise,
-  literal,
-  instance,
-  enums,
-  optional,
-  nullable,
-  never,
-  any,
-  nullish,
-  custom,
-  record,
-  map,
-  array,
-  set,
-  object,
-  strict,
-  tuple,
-  min,
-  max,
-  or,
-  and,
-  lazy,
-  transform,
-  not,
-  parse,
-  safeParse,
-  VError,
-  Infer,
-  is,
-} from './src'; // Adjust the import according to your file structure
+  string, boolean, number, func, symbol, bigint, integer, date, promise,
+  never, any, unknown as unknownSchema, nullish, literal, instance, enums, optional, nullable,
+  custom, record, map, array, set, object, strict, tuple, min, max, or, and,
+  not, lazy, transform, is, parse, safeParse, define, VError,
+  type Validator, type Issue, type Infer
+} from './src';
 
-describe('Validation Library Tests', () => {
-  test('string validation', () => {
-    expect(string().length).toBe(1);
-    expect(safeParse(string(), "test")).toEqual({ success: true, data: "test" });
-    expect(safeParse(string(), 123)).toEqual({ success: false, error: expect.any(VError) });
+/** Assert success and return the parsed data. */
+const ok = <T>(schema: Validator<T>, value: unknown): T => {
+  const r = safeParse(schema, value);
+  expect(r.success).toBe(true);
+  if (!r.success) throw new Error(`expected success, got: ${r.error.message}`);
+  return r.data;
+};
+
+/** Assert failure and return the VError for detailed assertions. */
+const fail = (schema: Validator<any>, value: unknown): VError => {
+  const r = safeParse(schema, value);
+  expect(r.success).toBe(false);
+  if (r.success) throw new Error('expected failure');
+  return r.error;
+};
+
+describe('public surface', () => {
+  test('exports all 38 runtime symbols, including define and unknown', () => {
+    expect(Object.keys(uvld)).toHaveLength(38);
+    expect(typeof define).toBe('function');
+    expect(typeof unknownSchema).toBe('function');
+    expect(typeof VError).toBe('function');
   });
 
-  test('boolean validation', () => {
-    expect(safeParse(boolean(), true)).toEqual({ success: true, data: true });
-    expect(safeParse(boolean(), "not a boolean")).toEqual({ success: false, error: expect.any(VError) });
+  test('define() is a usable extension point with the uniform signature', () => {
+    const uuid = define<string>('uuid', v => typeof v === 'string' && v.length === 36);
+    expect(ok(uuid(), '123e4567-e89b-12d3-a456-426614174000')).toHaveLength(36);
+    expect(fail(uuid('Not a uuid'), 'x').issues[0].message).toBe('Not a uuid');
+  });
+});
+
+describe('primitives', () => {
+  test('string / boolean / number', () => {
+    expect(ok(string(), 'hi')).toBe('hi');
+    expect(ok(boolean(), false)).toBe(false);
+    expect(ok(number(), 1.5)).toBe(1.5);
+    for (const [s, v] of [[string(), 1], [boolean(), 'x'], [number(), '1']] as const) fail(s, v);
   });
 
-  test('number validation', () => {
-    expect(safeParse(number(), 42)).toEqual({ success: true, data: 42 });
-    expect(safeParse(number(), "42")).toEqual({ success: false, error: expect.any(VError) });
+  test('number() rejects NaN and infinities; integer() rejects fractions', () => {
+    expect(fail(number(), NaN).issues[0].message).toMatch(/Expected number/);
+    fail(number(), Infinity);
+    fail(number(), -Infinity);
+    expect(ok(integer(), 42)).toBe(42);
+    fail(integer(), 4.2);
+    fail(integer(), NaN);
   });
 
-  test('function validation', () => {
-    expect(safeParse(func(), () => { })).toEqual({ success: true, data: expect.any(Function) });
-    expect(safeParse(func(), "not a function")).toEqual({ success: false, error: expect.any(VError) });
+  test('func / symbol / bigint / unknown / any / nullish / never', () => {
+    expect(ok(func(), () => 1)).toBeTypeOf('function');
+    const s = Symbol('s');
+    expect(ok(symbol(), s)).toBe(s);
+    expect(ok(bigint(), 10n)).toBe(10n);
+    expect(ok(unknownSchema(), { anything: true })).toEqual({ anything: true });
+    expect(ok(any(), null)).toBe(null);
+    expect(ok(nullish(), undefined)).toBe(undefined);
+    expect(ok(nullish(), null)).toBe(null);
+    fail(nullish(), 0);
+    fail(nullish(), '');
+    fail(never(), 1);
+    fail(string(), undefined);
   });
 
-  test('literal validation', () => {
-    expect(safeParse(literal(42), 42)).toEqual({ success: true, data: 42 });
-    expect(safeParse(literal(42), 43)).toEqual({ success: false, error: expect.any(VError) });
+  test('date() rejects invalid dates; promise() accepts thenables', () => {
+    expect(ok(date(), new Date('2024-01-01'))).toBeInstanceOf(Date);
+    fail(date(), new Date('not a date'));
+    fail(date(), '2024-01-01');
+    ok(promise(), Promise.resolve(1));
+    ok(promise(), { then() { /* thenable */ } });
+    fail(promise(), {});
   });
 
-  test('instance validation', () => {
-    class MyClass { }
-    expect(safeParse(instance(MyClass), new MyClass())).toEqual({ success: true, data: expect.any(MyClass) });
-    expect(safeParse(instance(MyClass), {})).toEqual({ success: false, error: expect.any(VError) });
+  test('object()-like inputs are rejected by primitive schemas', () => {
+    fail(string(), new String('x'));
+    fail(number(), new Number(1));
+  });
+});
+
+describe('literals, instances, enums', () => {
+  test('literal uses Object.is (NaN and -0 handled)', () => {
+    expect(ok(literal(NaN), NaN)).toBeNaN();
+    fail(literal(0), -0); // Object.is(0, -0) === false
+    ok(literal('admin'), 'admin');
+    fail(literal('admin'), 'user');
+    ok(literal(Symbol.for('k')), Symbol.for('k'));
+    ok(literal(1n), 1n);
+    ok(literal(null), null);
+    ok(literal(undefined), undefined);
   });
 
-  test('enums validation', () => {
-    const colorEnum = enums(['red', 'green', 'blue']);
-    expect(safeParse(colorEnum, 'red')).toEqual({ success: true, data: 'red' });
-    expect(safeParse(colorEnum, 'yellow')).toEqual({ success: false, error: expect.any(VError) });
+  test('literal accepts custom message + validations uniformly', () => {
+    const s = literal(2, 'must be two', [number()]);
+    ok(s, 2);
+    expect(fail(s, 1).issues[0].message).toBe('must be two');
   });
 
-  test('optional validation', () => {
-    const optionalString = optional(string());
-    expect(safeParse(optionalString, "test")).toEqual({ success: true, data: "test" });
-    expect(safeParse(optionalString, undefined)).toEqual({ success: true, data: undefined });
+  test('instance validates the constructor up front', () => {
+    class Foo { }
+    ok(instance(Foo), new Foo());
+    fail(instance(Foo), {});
+    expect(() => instance(42 as any)).toThrow(TypeError);
+    expect(() => instance((() => 1) as any)).toThrow(TypeError);
   });
 
-  test('nullable validation', () => {
-    const nullableString = nullable(string());
-    expect(safeParse(nullableString, null)).toEqual({ success: true, data: null });
-    expect(safeParse(nullableString, "test")).toEqual({ success: true, data: "test" });
+  test('enums requires an array and supports NaN via SameValueZero', () => {
+    ok(enums(['red', 'green', 'blue'] as const), 'green');
+    fail(enums(['red', 'green'] as const), 'yellow');
+    ok(enums([NaN, 1]), NaN);
+    expect(() => enums('abcd' as any)).toThrow(TypeError);
+  });
+});
+
+describe('messages, issues and paths', () => {
+  test('default and custom messages', () => {
+    expect(fail(string(), 1).message).toBe('Expected string, got number');
+    expect(fail(string('Need a string'), 1).message).toBe('Need a string');
+    expect(fail(object({}), null).message).toBe('Expected object, got null');
   });
 
-  test('record validation', () => {
-    const recordSchema = record(string(), number());
-    expect(safeParse(recordSchema, { key1: 1, key2: 2 })).toEqual({ success: true, data: { key1: 1, key2: 2 } });
-    expect(safeParse(recordSchema, { key1: "not a number" })).toEqual({ success: false, error: expect.any(VError) });
-  });
-
-  test('array validation', () => {
-    const arraySchema = array(number());
-    expect(safeParse(arraySchema, [1, 2, 3])).toEqual({ success: true, data: [1, 2, 3] });
-    expect(safeParse(arraySchema, [1, "not a number"])).toEqual({ success: false, error: expect.any(VError) });
-  });
-
-  test('object validation', () => {
-    const objectSchema = object({ a: string(), b: number() });
-    expect(safeParse(objectSchema, { a: "hello", b: 42 })).toEqual({ success: true, data: { a: "hello", b: 42 } });
-    expect(safeParse(objectSchema, { a: "hello", b: "not a number" })).toEqual({ success: false, error: expect.any(VError) });
-  });
-
-  test('tuple validation', () => {
-    const tupleSchema = tuple([string(), number()]);
-    expect(safeParse(tupleSchema, ["test", 42])).toEqual({ success: true, data: ["test", 42] });
-    expect(safeParse(tupleSchema, ["test", "not a number"])).toEqual({ success: false, error: expect.any(VError) });
-  });
-
-  test('min and max validation', () => {
-    expect(safeParse(and(string(), min(3)), "hi")).toEqual({ success: false, error: expect.any(VError) });
-    expect(safeParse(and(string(), max(2)), "hi")).toEqual({ success: true, data: "hi" });
-  });
-
-  test('or validation', () => {
-    const orSchema = or(string(), number());
-    expect(safeParse(orSchema, "hello")).toEqual({ success: true, data: "hello" });
-    expect(safeParse(orSchema, 123)).toEqual({ success: true, data: 123 });
-    expect(safeParse(orSchema, true)).toEqual({ success: false, error: expect.any(VError) });
-  });
-
-  test('and validation', () => {
-    const andSchema = and(string(), min(3));
-    expect(safeParse(andSchema, "hi")).toEqual({ success: false, error: expect.any(VError) });
-    expect(safeParse(andSchema, "hello")).toEqual({ success: true, data: "hello" });
-  });
-
-  test('not validation', () => {
-    const notString = not(string());
-    expect(safeParse(notString, 123)).toEqual({ success: true, data: 123 });
-    expect(safeParse(notString, "hello")).toEqual({ success: false, error: expect.any(VError) });
-  });
-
-  test('error handling in parse', () => {
-    expect(() => parse(string(), 123)).toThrow(VError);
-    expect(() => parse(number(), "not a number")).toThrow(VError);
-    expect(parse(number(), 42)).toBe(42);
-  });
-
-  test('lazy validation', () => {
-    const lazySchema = lazy(() => string());
-    const Node = object({
-      id: number(),
-      children: lazy(() => array(Node as any)),
+  test('every issue has all five fields and a type tag (never the raw value)', () => {
+    const secret = { password: 'hunter2' };
+    const issue: Issue = fail(string(), secret).issues[0];
+    expect(issue).toEqual({
+      message: 'Expected string, got object',
+      expected: 'string',
+      received: 'object',
+      path: '',
+      origin: 'value'
     });
-    // type NodeSchema = Infer<typeof Node>;
-    expect(safeParse(lazySchema, "hello")).toEqual({ success: true, data: "hello" });
-    expect(safeParse(Node, { id: 1, children: [{ id: 2, children: [] }] })).toEqual({ success: true, data: { id: 1, children: [{ id: 2, children: [] }] } });
+    expect(JSON.stringify(issue)).not.toContain('hunter2');
   });
 
-  // test('transform validation', () => {
-  //   const transformSchema = transform(string(), (value: string) => value.toUpperCase());
-  //   console.log(transformSchema("hello"));
-  //   expect(safeParse(transformSchema, "hello")).toEqual({ success: true, data: "HELLO" });
-  // });
-
-  test('custom validation 1', () => {
-    const customSchema = custom<string>((value) => value.length >= 5, "Value must be longer than 5 characters");
-    expect(safeParse(customSchema, "hello")).toEqual({ success: true, data: "hello" });
+  test('paths are unambiguous bracket segments', () => {
+    const s = object({ 'a.b': array(object({ x: string() })) });
+    expect(fail(s, { 'a.b': [{ x: 1 }] }).issues[0].path).toBe('["a.b"][0]["x"]');
+    expect(fail(array(string()), ['ok', 1]).issues[0].path).toBe('[1]');
   });
 
-  test('custom validation 2', () => {
-    const customSchema = custom<number>((value) => value >= 5, "Value must be higher than 5", [number()]);
-    expect(safeParse(customSchema, 6)).toEqual({ success: true, data: 6 });
+  test('VError exposes issues and a useful name/message', () => {
+    const e = fail(object({ a: string(), b: string() }), { a: 1, b: 2 });
+    expect(e).toBeInstanceOf(VError);
+    expect(e).toBeInstanceOf(Error);
+    expect(e.name).toBe('VError');
+    expect(e.issues).toHaveLength(2);
+    expect(e.message).toBe(e.issues[0].message);
+  });
+});
+
+describe('refinements / validations (uniform signature everywhere)', () => {
+  test('refinements may return true, false, a string or a partial issue', () => {
+    ok(string('', [v => (v as string).length > 2]), 'abc');
+    const a = fail(string('', [v => (v as string).length > 5]), 'abc');
+    expect(a.issues[0]).toMatchObject({ message: 'Invalid value', expected: 'unknown', received: 'string', path: '' });
+    const b = fail(string('', [() => 'too short']), 'abc');
+    expect(b.issues[0].message).toBe('too short');
+    const c = fail(string('', [() => ({ message: 'too short', origin: 'custom' })]), 'abc');
+    expect(c.issues[0]).toMatchObject({ message: 'too short', origin: 'custom', received: 'string', path: '' });
+    expect(fail(any('', [() => false]), 1).issues[0].message).toBe('Invalid value');
   });
 
-  test('is', () => {
-    expect(is(string(), 2)).toBe(false);
-    expect(is(string(), "Hello")).toBe(true);
+  test('every factory accepts (message, validations[]) — including min/max/not', () => {
+    ok(min(2, 'too small', [string()]), 'abc');
+    expect(fail(min(5, 'too small', [string()]), 'ab').message).toBe('too small');
+    ok(max(5, 'too big', [string()]), 'abc');
+    expect(fail(not(string(), 'no strings', [any()]), 'x').message).toBe('no strings');
+    ok(not(string(), '', [number()]), 123);
+    ok(optional(string(), '', [string()]), undefined);
+    ok(nullable(string(), '', [string()]), null);
+    ok(array(string(), '', [array(string())]), ['a']);
+    ok(tuple([string()], '', [array(string())]), ['a']);
   });
 
-  test("parse", () => {
-    expect(parse(string(), "hello")).toBe("hello");
-    expect(parse(number(), 123)).toBe(123);
-    expect(parse(boolean(), true)).toBe(true);
-    expect(parse(date(), new Date("2021-01-01"))).toEqual(new Date("2021-01-01"));
-    expect(parse(array(string()), ["a", "b", "c"])).toEqual(["a", "b", "c"]);
-    expect(parse(object({ key: string() }), { key: "value" })).toEqual({ key: "value" });
-    expect(parse(tuple([string(), number()]), ["hello", 123])).toEqual(["hello", 123]);
-    expect(parse(or(string(), number()), "hello")).toBe("hello");
-    expect(parse(or(string(), number()), 1)).toBe(1);
-    expect(parse(and(string(), min(2)), "123")).toBe("123");
-    expect(parse(and(object({ key1: string() }), object({ key2: number() })), { key1: "value", key2: 123 })).toEqual({ key1: "value", key2: 123 });
+  test('custom() validates its own predicate and can chain validations', () => {
+    const even = custom<number>(v => v % 2 === 0, 'must be even', [number()]);
+    ok(even, 4);
+    expect(fail(even, 3).message).toBe('must be even');
+    fail(even, '3');
+  });
+});
+
+describe('wrappers: optional / nullable', () => {
+  test('undefined / null short-circuit', () => {
+    expect(ok(optional(string()), undefined)).toBe(undefined);
+    expect(ok(nullable(string()), null)).toBe(null);
+    ok(optional(string()), 'x');
+    ok(nullable(string()), 'x');
   });
 
-  test("strict", () => {
-    const strictSchema = strict({ key1: string(), key2: number() });
-
-    // Valid case
-    expect(safeParse(strictSchema, { key1: "value", key2: 123 })).toEqual({ success: true, data: { key1: "value", key2: 123 } });
-
-    // Invalid case: extra key
-    expect(safeParse(strictSchema, { key1: "value", key2: 123, key3: "extra" })).toEqual({
-      success: false,
-      error: new VError("Unexpected keys found: key3", [
-        { message: "Unexpected keys found: key3", expected: "object", received: { key1: "value", key2: 123, key3: "extra" }, path: "", origin: "key" }
-      ])
-    });
-
-    // Invalid case: missing key
-    expect(safeParse(strictSchema, { key1: "value" })).toEqual({
-      success: false,
-      error: new VError("Expected number, received undefined", [
-        { message: "Expected number, received undefined", expected: "number", received: undefined, path: "key2", origin: "value" }
-      ])
-    });
-
-    // Invalid case: wrong type
-    expect(safeParse(strictSchema, { key1: "value", key2: "not a number" })).toEqual({
-      success: false,
-      error: new VError("Expected number, received string", [
-        { message: "Expected number, received string", expected: "number", received: "not a number", path: "key2", origin: "value" }
-      ])
-    });
+  test('nested issues are preserved (paths, count, origins)', () => {
+    const e = fail(optional(object({ a: string(), b: string() })), { a: 1, b: 2 });
+    expect(e.issues).toHaveLength(2);
+    expect(e.issues.map(i => i.path)).toEqual(['["a"]', '["b"]']);
+    expect(e.issues[0].origin).toBe('value');
   });
 
-  test("Complex", () => {
-    const objectSchema = strict({
-      stringField: string(),
-      // neverField: never(),
-      numberField: number(),
-      integerField: integer(),
-      booleanField: boolean(),
-      bigintField: bigint(),
-      symbolField: symbol(),
-      nullField: nullish(),
-      undefinedField: custom(value => value === undefined, "Value should be undefined"),
-      nestedObject: strict({
-        dateField: date(),
-        promiseField: promise(),
-        functionField: func(),
-        nestedArray: array(
-          tuple([
-            array(string()),  // Assume this is the intended schema for array elements
-            set(any()),
-            map(string(), any()),
-            //@ts-ignore
-            record(symbol(), map(string(), string()))
-          ])
-        ),
-        arrayOfObjects: array(strict({
-          name: string(),
-          details: strict({
-            description: string(),
-            attributes: array(strict({
-              color: string(),
-              size: string()
-            }))
-          })
-        })),
-        nestedFunction: func(),
-        //@ts-ignore
-        nestedRecord: record(symbol(), map(string(), any()))
-      }),
-      deeplyNestedArray: array(strict({
-        firstLevel: array(strict({
-          secondLevel: array(strict({
-            thirdLevel: array(strict({
-              fourthLevel: array(strict({
-                fifthLevel: array(string())
-              }))
-            }))
-          }))
-        }))
-      }))
-    });
-
-    const deeplyNestedObject = {
-      stringField: "Hello, world!",
-      numberField: 123,
-      integerField: 123,
-      booleanField: true,
-      bigintField: BigInt(9876543210123456789),
-      symbolField: Symbol('symbolKey'),
-      nullField: null,
-      undefinedField: undefined,
-      nestedObject: {
-        dateField: new Date(),
-        promiseField: new Promise((resolve) => resolve("Resolved Value")),
-        functionField: function () { return "I am a function"; },
-        nestedArray:
-          [
-            [["a", "b"],
-            new Set([
-              "a",
-              "b",
-              "c",
-              { nestedObject: { field: "Value" } }
-            ]),
-            new Map([
-              ["key1", "value1"],
-              ["key2", "value2"]
-            ]),
-            {
-              [Symbol('recordKey')]: new Map(
-                [
-                  [1, false]
-                ]
-              )
-            }
-            ]
-          ],
-        arrayOfObjects: [
-          {
-            name: "Item 1",
-            details: {
-              description: "Description of Item 1",
-              attributes: [
-                { color: "red", size: "large" },
-                { color: "blue", size: "medium" }
-              ]
-            }
-          },
-          {
-            name: "Item 2",
-            details: {
-              description: "Description of Item 2",
-              attributes: [
-                { color: "green", size: "small" },
-                { color: "yellow", size: "extra-large" }
-              ]
-            }
-          }
-        ],
-        nestedFunction: () => ({
-          innerFunction: () => new Promise((resolve) => resolve({ innerValue: "Nested Promise Value" })),
-        }),
-        nestedRecord: {
-          [Symbol('recordKey')]: {
-            recordField: [
-              {
-                recordItem: {
-                  value: 100,
-                  innerMap: new Map<string, string | Set<number>>([
-                    ["mapKey1", "mapValue1"],
-                    ["mapKey2", new Set([1, 2, 3])]
-                  ])
-                }
-              }
-            ]
-          }
-        }
-      },
-      deeplyNestedArray: [
-        {
-          firstLevel: [
-            {
-              secondLevel: [
-                {
-                  thirdLevel: [
-                    {
-                      fourthLevel: [
-                        {
-                          fifthLevel: [
-                            "A deeply nested string in an array"
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    };
-    type DeeplyNestedObject = Infer<typeof objectSchema>;
-    const parsed: DeeplyNestedObject = parse(objectSchema, deeplyNestedObject);
-    expect(parsed).toEqual(deeplyNestedObject)
+  test('an explicit message overrides nested messages', () => {
+    expect(fail(optional(string(), 'optional but wrong'), 1).issues[0].message).toBe('optional but wrong');
   });
 
-  test("never", () => {
-    const neverSchema = never();
-    expect(safeParse(neverSchema, "test")).toEqual({ success: false, error: expect.any(VError) });
+  test('validations still run for non-empty values', () => {
+    const s = optional(string(), '', [v => (v as string).length > 3]);
+    ok(s, 'long');
+    fail(s, 'no');
+  });
+});
+
+describe('composites', () => {
+  test('array validates items with index paths', () => {
+    ok(array(number()), [1, 2, 3]);
+    expect(fail(array(number()), [1, 'x']).issues[0].path).toBe('[1]');
+    fail(array(string()), 'not an array');
+  });
+
+  test('tuple checks length and every position', () => {
+    ok(tuple([string(), number()]), ['a', 1]);
+    expect(fail(tuple([string(), number()]), ['a']).issues[0].message).toMatch(/Tuple length 2 != 1/);
+    expect(fail(tuple([string(), number()]), ['a', 'b']).issues[0].path).toBe('[1]');
+  });
+
+  test('object: plain objects only, own properties only', () => {
+    ok(object({ a: string() }), { a: 'x', extra: 1 });
+    fail(object({ a: string() }), {});
+    fail(object({}), new Date());
+    fail(object({}), new Map());
+    fail(object({}), new Set());
+    fail(object({}), Promise.resolve());
+    fail(object({}), []);
+    fail(object({}), null);
+    ok(object({}), Object.create(null));
+  });
+
+  test('object: prototype chain cannot satisfy a required key', () => {
+    (Object.prototype as any).injected = 'from prototype';
+    try {
+      fail(object({ injected: string() }), {});
+    } finally {
+      delete (Object.prototype as any).injected;
+    }
+  });
+
+  test('object supports symbol keys in the schema', () => {
+    const k = Symbol('k');
+    ok(object({ [k]: number() }), { [k]: 1 });
+    expect(fail(object({ [k]: number() }), { [k]: 'x' }).issues[0].path).toBe('["Symbol(k)"]');
+  });
+
+  test('strict reports extra keys AND field errors (no early return)', () => {
+    const s = strict({ a: string(), b: number() });
+    ok(s, { a: 'x', b: 1 });
+    const e = fail(s, { a: 1, b: 'x', extra: true });
+    expect(e.issues).toHaveLength(3);
+    expect(e.issues[0]).toMatchObject({ message: 'Extra keys: extra', origin: 'key' });
+    expect(e.issues.slice(1).map(i => i.path)).toEqual(['["a"]', '["b"]']);
+  });
+
+  test('strict sees symbol and non-enumerable extra keys', () => {
+    const k = Symbol('extra');
+    expect(fail(strict({ a: string() }), { a: 'x', [k]: 1 }).issues[0].message).toContain('Symbol(extra)');
+    const o = { a: 'x' };
+    Object.defineProperty(o, 'hidden', { value: 1, enumerable: false });
+    fail(strict({ a: string() }), o);
+  });
+
+  test('record validates string AND symbol keys (no vacuous passes)', () => {
+    const k = Symbol('k');
+    ok(record(symbol(), number()), { [k]: 1 });
+    const e = fail(record(symbol(), number()), { [k]: 'not a number' });
+    expect(e.issues[0].path).toBe('["Symbol(k)"]');
+    expect(fail(record(string(), number()), { a: 'x' }).issues[0].origin).toBe('value');
+    expect(fail(record(symbol(), number()), { a: 1 }).issues[0].origin).toBe('key');
+    fail(record(string(), number()), [1, 2]);
+    fail(record(string(), number()), new Date());
+  });
+
+  test('map / set validate entries with index paths and key origins', () => {
+    ok(map(string(), number()), new Map([['a', 1]]));
+    expect(fail(map(string(), number()), new Map([['a', 'x']])).issues[0].path).toBe('[0]');
+    expect(fail(map(symbol(), number()), new Map([['a', 1]])).issues[0].origin).toBe('key');
+    ok(set(number()), new Set([1, 2]));
+    expect(fail(set(number()), new Set([1, 'x'])).issues[0].path).toBe('[1]');
+    fail(map(string(), number()), {});
+    fail(set(number()), []);
+  });
+});
+
+describe('constraints: min / max', () => {
+  test('numbers, strings, arrays, Map and Set', () => {
+    ok(min(5), 5);
+    ok(min(5), 'hello');
+    ok(min(2), [1, 2]);
+    ok(min(2), new Map([['a', 1], ['b', 2]]));
+    ok(min(2), new Set([1, 2]));
+    ok(max(3), 'abc');
+    ok(max(2), new Set([1, 2]));
+    fail(min(5), 4);
+    fail(max(2), [1, 2, 3]);
+  });
+
+  test('custom message works and never throws (regression: 2nd arg was validations)', () => {
+    ok(min(5, 'too short'), 'hello');
+    expect(fail(min(5, 'too short'), 'hi').message).toBe('too short');
+    ok(max(5, 'too long'), 'hi');
+    expect(fail(max(2, 'too long'), 'hello').message).toBe('too long');
+    expect(fail(min(3), 'x').issues[0].message).toBe('Min 3');
+  });
+
+  test('unsupported types fail cleanly without coercion or exceptions', () => {
+    for (const v of [null, true, false, {}, Symbol('s'), undefined, () => 1]) {
+      const r = safeParse(min(1), v);
+      expect(r.success).toBe(false);
+      expect(safeParse(max(1), v).success).toBe(false);
+    }
+    expect(() => safeParse(min(5), Symbol('s'))).not.toThrow();
+  });
+});
+
+describe('combinators', () => {
+  test('or(): per-branch results, not issue counts (regression)', () => {
+    ok(or(string(), number()), 'x');
+    ok(or(string(), number()), 1);
+    fail(or(string(), number()), true);
+    fail(or(array(string()), number()), [1, 2, 3]); // 3 issues from one branch
+    fail(or(object({ a: string(), b: string() }), string()), { a: 1, b: 2 });
+    ok(or(array(string()), any()), [1, 2]); // a successful branch wins
+    fail(or(), 1); // zero schemas is never valid
+    const e = fail(or(string(), number()), true);
+    expect(e.issues).toHaveLength(2); // all branch issues aggregated
+  });
+
+  test('or() short-circuits after the first successful branch', () => {
+    const spy = vi.fn(() => []);
+    ok(or(string(), spy as any), 'x');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test('and() collects issues from every schema', () => {
+    ok(and(string(), min(3)), 'hello');
+    expect(fail(and(string(), min(10)), 1).issues).toHaveLength(2);
+  });
+
+  test('not() inverts a schema and honours message/validations', () => {
+    ok(not(string()), 123);
+    fail(not(string()), 'x');
+    expect(fail(not(string(), 'no strings'), 'x').message).toBe('no strings');
+  });
+
+  test('lazy() resolves once and supports recursive schemas', () => {
+    const resolver = vi.fn(() => string());
+    const s = lazy(resolver);
+    ok(s, 'a');
+    ok(s, 'b');
+    expect(resolver).toHaveBeenCalledTimes(1);
+
+    const Node: Validator<any> = object({ id: number(), children: array(lazy(() => Node)) });
+    ok(Node, { id: 1, children: [{ id: 2, children: [] }] });
+    expect(fail(Node, { id: 1, children: [{ id: 'x', children: [] }] }).issues[0].path)
+      .toBe('["children"][0]["id"]');
+  });
+
+  test('transform() returns transformed data at the root, applied once', () => {
+    const upper = vi.fn((s: string) => s.toUpperCase());
+    const s = transform(string(), upper);
+    expect(ok(s, 'hello')).toBe('HELLO');
+    expect(upper).toHaveBeenCalledTimes(1);
+    expect(parse(s, 'hi')).toBe('HI');
+    expect(fail(s, 1).issues[0].message).toMatch(/Threw/); // non-string has no toUpperCase
+  });
+
+  test('transform() nested in an object affects validation only (documented)', () => {
+    const s = object({ name: transform(string(), (x: string) => x.trim()) });
+    const value = { name: '  ok  ' };
+    expect(ok(s, value)).toBe(value);
+  });
+});
+
+describe('entry points & robustness', () => {
+  test('is() is a type-guard-like boolean and never throws', () => {
+    expect(is(string(), 'x')).toBe(true);
+    expect(is(string(), 1)).toBe(false);
+    expect(is(custom(() => { throw new Error('boom'); }), 1)).toBe(false);
+  });
+
+  test('parse() returns the original reference and throws VError on failure', () => {
+    const value = { a: 1 };
+    expect(parse(object({ a: number() }), value)).toBe(value);
+    expect(() => parse(string(), 1)).toThrow(VError);
+    try { parse(string(), 1); } catch (e) {
+      expect((e as VError).issues[0]).toMatchObject({ expected: 'string', received: 'number' });
+    }
+  });
+
+  test('safeParse() is genuinely safe: validator exceptions become issues', () => {
+    const boom = custom(() => { throw new Error('kaboom'); });
+    const e = fail(boom, 1);
+    expect(e.issues[0].message).toContain('kaboom');
+    expect(e.issues[0].expected).toBe('validator');
+    expect(() => safeParse(min(5), Symbol('s'))).not.toThrow();
+    expect(() => safeParse(instance(42 as any), {})).toThrow(); // schema error, not data error
+    const getter = { get a() { throw new Error('getter'); } };
+    expect(() => safeParse(object({ a: string() }), getter)).not.toThrow();
+  });
+
+  test('circular data cannot blow the stack', () => {
+    const Node: Validator<any> = object({ id: number(), next: lazy(() => Node) });
+    const circular: any = { id: 1 };
+    circular.next = circular;
+    const r = safeParse(Node, circular);
+    expect(r.success).toBe(false);
+  });
+
+  test('origin propagates through or / and / lazy / transform / composites', () => {
+    const s = record(or(number(), boolean()) as Validator<any>, number());
+    expect(fail(s, { a: 1 }).issues.every(i => i.origin === 'key')).toBe(true);
+    const s2 = record(lazy(() => symbol()), number());
+    expect(fail(s2, { a: 1 }).issues[0].origin).toBe('key');
+  });
+
+  test('type inference is usable at runtime boundaries', () => {
+    const User = object({ name: string(), age: number(), tags: array(string()) });
+    type User = Infer<typeof User>;
+    const parsed: User = parse(User, { name: 'A', age: 1, tags: [] });
+    expect(parsed.name).toBe('A');
+    let v: unknown = parsed.name;
+    if (is(string(), v)) {
+      const narrowed: string = v;
+      expect(narrowed).toBe('A');
+    }
   });
 });

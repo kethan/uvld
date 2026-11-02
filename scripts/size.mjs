@@ -7,7 +7,9 @@ import { gzipSync, brotliCompressSync } from 'node:zlib';
 
 const BUDGET = {
   // core (unchanged by the utils entry point)
-  'dist/index.js': { raw: 4450, gzip: 1950, brotli: 1790 },
+  // Allows the 13 /*#__PURE__*/ markers that make the ESM tree-shakeable for
+  // esbuild/webpack (+169 raw / +27 gzip vs 1.1.0).
+  'dist/index.js': { raw: 4600, gzip: 2000, brotli: 1830 },
   'dist/index.cjs': { raw: 4600, gzip: 1900, brotli: 1750 },
   'dist/index.min.js': { raw: 4400, gzip: 1900, brotli: 1750 },
   // optional utils entry point

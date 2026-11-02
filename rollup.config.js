@@ -11,7 +11,12 @@ const base = {
   compress: { passes: 5, unsafe: true, unsafe_arrows: true, toplevel: true },
   format: { comments: false }
 };
-const esm = terser({ ...base, module: true, mangle: { toplevel: true } });
+// Keep the `/*#__PURE__*/` markers that tell esbuild and webpack a factory call
+// is side-effect free, so unimported schemas get tree-shaken. Without them
+// those bundlers keep every factory: one `is(string(), 1)` import costs 708 B
+// gzip instead of 544 B. Only ESM is tree-shaken, so CJS/IIFE stay as-is.
+const pure = { comments: false, preserve_annotations: true };
+const esm = terser({ ...base, format: pure, module: true, mangle: { toplevel: true } });
 const cjs = terser({ ...base, mangle: { toplevel: true, reserved: ['exports', 'module', 'require'] } });
 // The IIFE's `var uvld = ...` must survive: no top-level compression/mangling.
 const iife = terser({

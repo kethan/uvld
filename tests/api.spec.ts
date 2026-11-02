@@ -142,6 +142,14 @@ describe('API surface stays in sync', () => {
     expect(read('src/utils.js')).toContain("from './index.js'");
   });
 
+  test('PURE annotations survive so bundlers can tree-shake the core', () => {
+    // Terser merges the 13 primitive factories into one comma-separated
+    // `const` statement. Without the markers, one imported schema keeps all
+    // of them: esbuild shipped 708 B gzip for `is(string(), 1)` instead of 544.
+    expect(read('src/index.js').match(/\/\*#__PURE__\*\/define\(/g)).toHaveLength(13);
+    expect(read('rollup.config.js')).toMatch(/preserve_annotations:\s*true/);
+  });
+
   test('the abandoned prototype is gone (one source of truth)', () => {
     expect(existsSync(at('src/try.ts'))).toBe(false);
   });
@@ -187,7 +195,7 @@ describe('package manifest', () => {
     expect(p.sideEffects).toBe(false);
     expect(p.files).toContain('dist');
     expect(p.engines.node).toBeTruthy();
-    expect(p.version).toBe('1.1.0');
+    expect(p.version).toBe('1.1.1');
     expect(p.keywords.length).toBeGreaterThan(3);
   });
 

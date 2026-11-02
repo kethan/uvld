@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.1 (2026-11-02)
+
+### Fixed
+
+- **Tree-shaking for esbuild and webpack.** Terser merges the 13 primitive
+  schema factories into a single comma-separated `const` statement, so importing
+  one schema dragged in all of them — a consumer doing `is(string(), 1)` shipped
+  708 B gzip instead of 544 B. Each factory call is now marked `/*#__PURE__*/`
+  and the ESM build preserves those annotations (`preserve_annotations: true`),
+  letting bundlers drop each unimported declarator. Measured for
+  `is(string(), 1)`: Rollup 521 B gzip, esbuild 544 B gzip — the two bundlers
+  now agree within ~5%, where esbuild previously lagged by 188 B. Cost: +169 raw
+  / +27 gzip bytes on `dist/index.js` (4,374 → 4,543 B). CJS and IIFE bundles
+  are unchanged; `sideEffects: false` was already declared.
+
 ## 1.1.0 (2026-10-25)
 
 Additive: a new `uvld/async` entry point and a fix for a type/runtime mismatch

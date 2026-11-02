@@ -54,19 +54,22 @@ const define = (type, validate) => (message = '', validations = []) => (value, c
 };
 
 // --- primitives -----------------------------------------------------------
-const string = define('string', v => typeof v === 'string');
-const boolean = define('boolean', v => typeof v === 'boolean');
-const number = define('number', v => typeof v === 'number' && Number.isFinite(v));
-const func = define('function', v => typeof v === 'function');
-const symbol = define('symbol', v => typeof v === 'symbol');
-const bigint = define('bigint', v => typeof v === 'bigint');
-const integer = define('integer', Number.isInteger);
-const date = define('date', v => v instanceof Date && !Number.isNaN(v.getTime()));
-const promise = define('promise', v => v != null && typeof v.then === 'function');
-const never = define('never', () => false);
-const any = define('any', () => true);
-const unknown = define('unknown', () => true);
-const nullish = define('nullish', v => v == null);
+// `/*#__PURE__*/` marks each factory call as side-effect free so esbuild and
+// webpack can drop the schemas a consumer never imports. Bundlers that honour
+// it remove unused factories; without the annotation they keep them all.
+const string = /*#__PURE__*/define('string', v => typeof v === 'string');
+const boolean = /*#__PURE__*/define('boolean', v => typeof v === 'boolean');
+const number = /*#__PURE__*/define('number', v => typeof v === 'number' && Number.isFinite(v));
+const func = /*#__PURE__*/define('function', v => typeof v === 'function');
+const symbol = /*#__PURE__*/define('symbol', v => typeof v === 'symbol');
+const bigint = /*#__PURE__*/define('bigint', v => typeof v === 'bigint');
+const integer = /*#__PURE__*/define('integer', Number.isInteger);
+const date = /*#__PURE__*/define('date', v => v instanceof Date && !Number.isNaN(v.getTime()));
+const promise = /*#__PURE__*/define('promise', v => v != null && typeof v.then === 'function');
+const never = /*#__PURE__*/define('never', () => false);
+const any = /*#__PURE__*/define('any', () => true);
+const unknown = /*#__PURE__*/define('unknown', () => true);
+const nullish = /*#__PURE__*/define('nullish', v => v == null);
 
 // --- literals, classes, enums ---------------------------------------------
 const literal = (v, message = '', validations = []) =>

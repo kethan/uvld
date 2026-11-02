@@ -473,7 +473,7 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 | Bundle | Raw | gzip | brotli |
 | --- | ---: | ---: | ---: |
-| `dist/index.js` (ESM) | 4,374 B | 1,919 B | 1,774 B |
+| `dist/index.js` (ESM) | 4,543 B | 1,946 B | 1,800 B |
 | `dist/index.cjs` (CJS) | 4,481 B | 1,853 B | 1,706 B |
 | `dist/index.min.js` (IIFE) | 4,288 B | 1,835 B | 1,692 B |
 | `dist/utils.js` (ESM, opt-in) | 13,608 B | 5,073 B | 4,600 B |
@@ -491,6 +491,24 @@ so you only pay for what you import.
 - Compressed core size is slightly larger than the 0.0.1 minified CDN build (~1.27 kB gzip) because 1.0.0 fixes ~20 correctness defects — symbol-key/own-property handling, context propagation, exception safety and path encoding. The size budget stops it growing further.
 - The published tarball is larger than 0.0.1's because it now ships the utils + async bundles, their declarations and complete docs. The core bundle itself is still ~4.4 kB.
 - Bundlers can tree-shake the ESM builds. The core is synchronous and allocation-light with no schema compilation step; regex-heavy formats and async validation live only in the opt-in entries.
+
+**Tree-shaking works, and it is now bundler-independent.** Each schema factory
+call carries a `/*#__PURE__*/` marker that the ESM build preserves, so unused
+schemas are dropped even though Terser merges all factories into a single
+comma-separated `const` statement. Measured for a real consumer:
+
+| import | Rollup (gzip) | esbuild (gzip) |
+|---|---:|---:|
+| `is(string(), 1)` | 521 B | 544 B |
+| `string` only | 422 B | — |
+| `string` + `object` + `safeParse` | 823 B | 854 B |
+| `import * as uvld from 'uvld'` (no shaking possible) | 1,853 B | — |
+
+That is 72–78% below the full core. Without the markers esbuild kept every
+primitive factory — 708 B gzip for the same one-line import, which is what the
+markers fix. The ESM build is ~169 raw / 27 gzip bytes larger to pay for it.
+`sideEffects: false` is declared, so a consumer that never imports `uvld` pays
+nothing at all.
 - A depth guard (64 levels) prevents stack overflows on circular data.
 
 ---

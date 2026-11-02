@@ -142,12 +142,17 @@ describe('API surface stays in sync', () => {
     expect(read('src/utils.js')).toContain("from './index.js'");
   });
 
-  test('PURE annotations survive so bundlers can tree-shake the core', () => {
+  test('primitive factories are lazy, so unused ones tree-shake without markers', () => {
     // Terser merges the 13 primitive factories into one comma-separated
-    // `const` statement. Without the markers, one imported schema keeps all
-    // of them: esbuild shipped 708 B gzip for `is(string(), 1)` instead of 544.
-    expect(read('src/index.js').match(/\/\*#__PURE__\*\/define\(/g)).toHaveLength(13);
-    expect(read('rollup.config.js')).toMatch(/preserve_annotations:\s*true/);
+    // `const` statement. A module-level `define(...)` call looks side-effectful
+    // to esbuild/webpack, so they keep every factory; an arrow that calls
+    // `define()` only when invoked is dropped when unimported. No `/*#__PURE__*/`
+    // markers and no `preserve_annotations` option are needed.
+    const src = read('src/index.js');
+    expect(src).not.toContain('/*#__PURE__*/');
+    expect(read('rollup.config.js')).not.toContain('preserve_annotations');
+    expect(src.match(/^const \w+ = \(message, validations\) => define\(/gm)).toHaveLength(13);
+    expect(src).not.toMatch(/^const \w+ = define\(/m);
   });
 
   test('the abandoned prototype is gone (one source of truth)', () => {

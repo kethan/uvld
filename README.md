@@ -4,7 +4,7 @@
 
 **uvld** validates unknown data in JavaScript and TypeScript: one small function per type, composed into schemas, with structured errors and static type inference.
 
-- **Zero runtime dependencies.** 38 core exports (~4.4 kB minified / ~1.9 kB gzip), **158 opt-in utilities** in `uvld/utils` and **21 await-aware exports** in `uvld/async`. Both extras are separate tree-shakeable entries that never bundle core code.
+- **Zero runtime dependencies.** 38 core exports (~4.5 kB minified / ~1.9 kB gzip), **158 opt-in utilities** in `uvld/utils` and **21 await-aware exports** in `uvld/async`. Both extras are separate tree-shakeable entries that never bundle core code.
 - **Correct by default.** Finite numbers, own properties, symbol keys, safe unions, exception-safe parsing.
 - **TypeScript-first.** `Infer<typeof schema>`, a real `is()` type guard, declarations shipped with the package.
 - **Uniform API.** Every validator factory takes `(message?, validations?)`.
@@ -473,9 +473,9 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 | Bundle | Raw | gzip | brotli |
 | --- | ---: | ---: | ---: |
-| `dist/index.js` (ESM) | 4,543 B | 1,946 B | 1,800 B |
-| `dist/index.cjs` (CJS) | 4,481 B | 1,853 B | 1,706 B |
-| `dist/index.min.js` (IIFE) | 4,288 B | 1,835 B | 1,692 B |
+| `dist/index.js` (ESM) | 4,530 B | 1,935 B | 1,779 B |
+| `dist/index.cjs` (CJS) | 4,585 B | 1,818 B | 1,669 B |
+| `dist/index.min.js` (IIFE) | 4,392 B | 1,797 B | 1,643 B |
 | `dist/utils.js` (ESM, opt-in) | 13,608 B | 5,073 B | 4,600 B |
 | `dist/utils.cjs` (CJS, opt-in) | 14,033 B | 4,916 B | 4,431 B |
 | `dist/async.js` (ESM, opt-in) | 5,815 B | 1,968 B | 1,782 B |
@@ -483,33 +483,35 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 `uvld/utils` and `uvld/async` are **separate entry points**: each imports the
 core as an external module (never duplicates it), so the core stays a single
-~4.4 kB file. The 1.1.0 `Context.out` fix added 59 raw bytes to that file;
-importing the extras adds nothing. Bundlers tree-shake the named ESM exports,
-so you only pay for what you import.
+~4.5 kB file. Importing the extras adds nothing. Bundlers tree-shake the named
+ESM exports, so you only pay for what you import.
 
-- Raw ESM bytes are **32% lower** than 0.0.1 (6,422 B unminified); there are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs).
+- Raw ESM bytes are **29% lower** than 0.0.1 (6,422 B unminified); there are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs).
 - Compressed core size is slightly larger than the 0.0.1 minified CDN build (~1.27 kB gzip) because 1.0.0 fixes ~20 correctness defects — symbol-key/own-property handling, context propagation, exception safety and path encoding. The size budget stops it growing further.
-- The published tarball is larger than 0.0.1's because it now ships the utils + async bundles, their declarations and complete docs. The core bundle itself is still ~4.4 kB.
+- The published tarball is larger than 0.0.1's because it now ships the utils + async bundles, their declarations and complete docs. The core bundle itself is still ~4.5 kB.
 - Bundlers can tree-shake the ESM builds. The core is synchronous and allocation-light with no schema compilation step; regex-heavy formats and async validation live only in the opt-in entries.
+- A depth guard (64 levels) prevents stack overflows on circular data.
 
-**Tree-shaking works, and it is now bundler-independent.** Each schema factory
-call carries a `/*#__PURE__*/` marker that the ESM build preserves, so unused
-schemas are dropped even though Terser merges all factories into a single
-comma-separated `const` statement. Measured for a real consumer:
+**Tree-shaking works, and it needs no bundler-specific flags.** The 13 primitive
+schemas are lazy factories: each export is a plain function that calls `define()`
+only when a consumer asks for a validator, so no schema is constructed at module
+load. Terser still merges them into one comma-separated `const` statement, but an
+unimported factory is now just an unreferenced arrow function, which esbuild and
+webpack drop — no `/*#__PURE__*/` markers and no `preserve_annotations` Terser
+option. Measured for a real consumer:
 
 | import | Rollup (gzip) | esbuild (gzip) |
 |---|---:|---:|
-| `is(string(), 1)` | 521 B | 544 B |
-| `string` only | 422 B | — |
-| `string` + `object` + `safeParse` | 823 B | 854 B |
-| `import * as uvld from 'uvld'` (no shaking possible) | 1,853 B | — |
+| `is(string(), 1)` | 520 B | 529 B |
+| `string` only | 423 B | 427 B |
+| `string` + `object` + `safeParse` | 825 B | 839 B |
+| `import * as uvld from 'uvld'` (no shaking possible) | 1,818 B | — |
 
-That is 72–78% below the full core. Without the markers esbuild kept every
-primitive factory — 708 B gzip for the same one-line import, which is what the
-markers fix. The ESM build is ~169 raw / 27 gzip bytes larger to pay for it.
-`sideEffects: false` is declared, so a consumer that never imports `uvld` pays
-nothing at all.
-- A depth guard (64 levels) prevents stack overflows on circular data.
+That is 73–78% below the full core for a one-schema import, and the two bundlers
+now agree within ~2%. The lazy wrappers cost +156 raw / +16 gzip bytes on the ESM
+bundle versus 1.1.0, while CJS and IIFE shrink under gzip (−35 B and −38 B) at
+about +104 raw bytes each. `sideEffects: false` is declared, so a consumer that
+never imports `uvld` pays nothing at all.
 
 ---
 

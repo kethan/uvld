@@ -1,10 +1,14 @@
-// uvld/utils — optional, tree-shakeable add-on utilities.
-// This module is a SEPARATE entry point: importing it never adds a byte to the
-// core `uvld` bundle. Everything here is either
+// uvld — optional utilities, part of the single `uvld` entry point.
+// Everything here is either
 //   * a CHECK   (value) => true | message | partial Issue | Issue[]
 //   * a TRANSFORM ACTION (value) => value, tagged with `_transform`
 // Checks can be used standalone or in a core `validations` array; transform
 // actions are used with `pipe(...)` / core `transform(schema, action)`.
+//
+// Every factory below is lazy: the arrow only calls `fmt()` / `limit()` /
+// `meta()` when a consumer asks for a check. A module-level call looks
+// side-effectful to esbuild and webpack and would drag all utilities into any
+// bundle that imports the core; an unreferenced arrow is dropped.
 import {
   transform as coreTransform, is as coreIs, safeParse, object as coreObject,
   tuple as coreTuple, and as coreAnd
@@ -129,46 +133,46 @@ const validUrl = v => {
   try { new globalThis.URL(v); return true; } catch { return false; }
 };
 
-const base64 = fmt('base64', v => rx(R.base64, v));
-const bic = fmt('bic', v => rx(R.bic, v));
-const cuid2 = fmt('cuid2', v => rx(R.cuid2, v));
-const decimal = fmt('decimal', v => rx(R.decimal, v));
-const digits = fmt('digits', v => rx(R.digits, v));
-const domain = fmt('domain', v => rx(R.domain, v));
-const email = fmt('email', v => rx(R.email, v));
-const rfcEmail = fmt('RFC email', v => rx(R.rfcEmail, v) && v.length <= 254 && !v.includes('..'));
-const emoji = fmt('emoji', v => rx(R.emoji, v));
-const hexadecimal = fmt('hexadecimal', v => rx(R.hexadecimal, v));
-const hexColor = fmt('hex color', v => rx(R.hexColor, v));
-const imei = fmt('IMEI', v => typeof v === 'string' && rx(R.imei, v) && luhn(v));
-const ipv4 = fmt('IPv4', v => rx(R.ipv4, v));
-const ipv6 = fmt('IPv6', isIPv6);
-const ip = fmt('IP', v => rx(R.ipv4, v) || isIPv6(v));
-const isrc = fmt('ISRC', v => rx(R.isrc, v));
-const isoDate = fmt('ISO date', v => rx(R.isoDate, v));
-const isoDateTime = fmt('ISO date-time', v => rx(R.isoDateTime, v));
-const isoDateTimeSecond = fmt('ISO date-time', v => rx(R.isoDateTimeSecond, v));
-const isoTime = fmt('ISO time', v => rx(R.isoTime, v));
-const isoTimeSecond = fmt('ISO time', v => rx(R.isoTimeSecond, v));
-const isoTimestamp = fmt('ISO timestamp', v => rx(R.isoTimestamp, v));
-const isoWeek = fmt('ISO week', v => rx(R.isoWeek, v));
-const jwsCompact = fmt('JWS compact', v => rx(R.jwsCompact, v));
-const ksuid = fmt('KSUID', v => rx(R.ksuid, v));
-const mac48 = fmt('MAC-48', v => rx(R.mac48, v));
-const mac64 = fmt('MAC-64', v => rx(R.mac64, v));
-const mac = fmt('MAC', v => rx(R.mac48, v) || rx(R.mac64, v));
-const mimeType = fmt('MIME type', v => rx(R.mimeType, v));
-const octal = fmt('octal', v => rx(R.octal, v));
-const slug = fmt('slug', v => rx(R.slug, v));
-const ulid = fmt('ULID', v => rx(R.ulid, v));
-const url = fmt('URL', validUrl);
-const uuid = fmt('UUID', v => rx(R.uuid, v));
-const isbn = fmt('ISBN', v => typeof v === 'string' && rx(R.isbn, v) && isbnCheck(v));
-const creditCard = fmt('credit card', v => {
+const base64 = (message) => fmt('base64', v => rx(R.base64, v))(message);
+const bic = (message) => fmt('bic', v => rx(R.bic, v))(message);
+const cuid2 = (message) => fmt('cuid2', v => rx(R.cuid2, v))(message);
+const decimal = (message) => fmt('decimal', v => rx(R.decimal, v))(message);
+const digits = (message) => fmt('digits', v => rx(R.digits, v))(message);
+const domain = (message) => fmt('domain', v => rx(R.domain, v))(message);
+const email = (message) => fmt('email', v => rx(R.email, v))(message);
+const rfcEmail = (message) => fmt('RFC email', v => rx(R.rfcEmail, v) && v.length <= 254 && !v.includes('..'))(message);
+const emoji = (message) => fmt('emoji', v => rx(R.emoji, v))(message);
+const hexadecimal = (message) => fmt('hexadecimal', v => rx(R.hexadecimal, v))(message);
+const hexColor = (message) => fmt('hex color', v => rx(R.hexColor, v))(message);
+const imei = (message) => fmt('IMEI', v => typeof v === 'string' && rx(R.imei, v) && luhn(v))(message);
+const ipv4 = (message) => fmt('IPv4', v => rx(R.ipv4, v))(message);
+const ipv6 = (message) => fmt('IPv6', isIPv6)(message);
+const ip = (message) => fmt('IP', v => rx(R.ipv4, v) || isIPv6(v))(message);
+const isrc = (message) => fmt('ISRC', v => rx(R.isrc, v))(message);
+const isoDate = (message) => fmt('ISO date', v => rx(R.isoDate, v))(message);
+const isoDateTime = (message) => fmt('ISO date-time', v => rx(R.isoDateTime, v))(message);
+const isoDateTimeSecond = (message) => fmt('ISO date-time', v => rx(R.isoDateTimeSecond, v))(message);
+const isoTime = (message) => fmt('ISO time', v => rx(R.isoTime, v))(message);
+const isoTimeSecond = (message) => fmt('ISO time', v => rx(R.isoTimeSecond, v))(message);
+const isoTimestamp = (message) => fmt('ISO timestamp', v => rx(R.isoTimestamp, v))(message);
+const isoWeek = (message) => fmt('ISO week', v => rx(R.isoWeek, v))(message);
+const jwsCompact = (message) => fmt('JWS compact', v => rx(R.jwsCompact, v))(message);
+const ksuid = (message) => fmt('KSUID', v => rx(R.ksuid, v))(message);
+const mac48 = (message) => fmt('MAC-48', v => rx(R.mac48, v))(message);
+const mac64 = (message) => fmt('MAC-64', v => rx(R.mac64, v))(message);
+const mac = (message) => fmt('MAC', v => rx(R.mac48, v) || rx(R.mac64, v))(message);
+const mimeType = (message) => fmt('MIME type', v => rx(R.mimeType, v))(message);
+const octal = (message) => fmt('octal', v => rx(R.octal, v))(message);
+const slug = (message) => fmt('slug', v => rx(R.slug, v))(message);
+const ulid = (message) => fmt('ULID', v => rx(R.ulid, v))(message);
+const url = (message) => fmt('URL', validUrl)(message);
+const uuid = (message) => fmt('UUID', v => rx(R.uuid, v))(message);
+const isbn = (message) => fmt('ISBN', v => typeof v === 'string' && rx(R.isbn, v) && isbnCheck(v))(message);
+const creditCard = (message) => fmt('credit card', v => {
   if (typeof v !== 'string') return false;
   const s = v.replace(/[\s-]/g, '');
   return /^\d{13,19}$/.test(s) && luhn(s);
-});
+})(message);
 const nanoid = (size = 21, message = `Invalid nanoid`) =>
   fmt('nanoid', v => new RegExp(`^[A-Za-z0-9_-]{${size}}$`).test(v))(message);
 const hash = (algorithm = 'sha256', message = `Invalid ${algorithm} hash`) => {
@@ -192,11 +196,11 @@ const notValue = (expected, message = `Unexpected ${String(expected)}`) => v => 
 const notValues = (list, message = 'Forbidden value') => v => list.some(x => Object.is(x, v)) ? message : yes;
 const multipleOf = (divisor, message = `Not a multiple of ${divisor}`) => v =>
   typeof v === 'number' && Number.isFinite(v) && v % divisor === 0 ? yes : message;
-const finite = fmt('finite number', v => typeof v === 'number' && Number.isFinite(v));
-const integer = fmt('integer', Number.isInteger);
-const safeInteger = fmt('safe integer', Number.isSafeInteger);
-const empty = fmt('empty', v => { const n = sizeOf(v); return Number.isFinite(n) && n === 0; });
-const nonEmpty = fmt('non-empty', v => { const n = sizeOf(v); return Number.isFinite(n) && n > 0; });
+const finite = (message) => fmt('finite number', v => typeof v === 'number' && Number.isFinite(v))(message);
+const integerCheck = (message) => fmt('integer', Number.isInteger)(message);
+const safeInteger = (message) => fmt('safe integer', Number.isSafeInteger)(message);
+const empty = (message) => fmt('empty', v => { const n = sizeOf(v); return Number.isFinite(n) && n === 0; })(message);
+const nonEmpty = (message) => fmt('non-empty', v => { const n = sizeOf(v); return Number.isFinite(n) && n > 0; })(message);
 const includes = (needle, message = `Must include ${String(needle)}`) => v =>
   (typeof v === 'string' || Array.isArray(v)) && v.includes(needle) ? yes : message;
 const excludes = (needle, message = `Must not include ${String(needle)}`) => v =>
@@ -207,38 +211,38 @@ const endsWith = (suffix, message = `Must end with ${String(suffix)}`) => v =>
   typeof v === 'string' && v.endsWith(suffix) ? yes : message;
 
 // --- length / size / count / value constraints ------------------------------
-const length = limit('length', eq, 'Length');
-const minLength = limit('length', ge, 'Min length');
-const maxLength = limit('length', le, 'Max length');
-const notLength = limit('length', ne, 'Not length');
-const bytes = limit('bytes', eq, 'Bytes');
-const minBytes = limit('bytes', ge, 'Min bytes');
-const maxBytes = limit('bytes', le, 'Max bytes');
-const notBytes = limit('bytes', ne, 'Not bytes');
-const codePoints = limit('codePoints', eq, 'Code points');
-const minCodePoints = limit('codePoints', ge, 'Min code points');
-const maxCodePoints = limit('codePoints', le, 'Max code points');
-const notCodePoints = limit('codePoints', ne, 'Not code points');
-const graphemes = limit('graphemes', eq, 'Graphemes');
-const minGraphemes = limit('graphemes', ge, 'Min graphemes');
-const maxGraphemes = limit('graphemes', le, 'Max graphemes');
-const notGraphemes = limit('graphemes', ne, 'Not graphemes');
-const words = limit('words', eq, 'Words');
-const minWords = limit('words', ge, 'Min words');
-const maxWords = limit('words', le, 'Max words');
-const notWords = limit('words', ne, 'Not words');
-const size = limit('size', eq, 'Size');
-const minSize = limit('size', ge, 'Min size');
-const maxSize = limit('size', le, 'Max size');
-const notSize = limit('size', ne, 'Not size');
-const entries = limit('entries', eq, 'Entries');
-const minEntries = limit('entries', ge, 'Min entries');
-const maxEntries = limit('entries', le, 'Max entries');
-const notEntries = limit('entries', ne, 'Not entries');
-const minValue = limit('value', ge, 'Min value');
-const maxValue = limit('value', le, 'Max value');
-const gtValue = limit('value', gt, 'Greater than');
-const ltValue = limit('value', lt, 'Less than');
+const length = (bound, message) => limit('length', eq, 'Length')(bound, message);
+const minLength = (bound, message) => limit('length', ge, 'Min length')(bound, message);
+const maxLength = (bound, message) => limit('length', le, 'Max length')(bound, message);
+const notLength = (bound, message) => limit('length', ne, 'Not length')(bound, message);
+const bytes = (bound, message) => limit('bytes', eq, 'Bytes')(bound, message);
+const minBytes = (bound, message) => limit('bytes', ge, 'Min bytes')(bound, message);
+const maxBytes = (bound, message) => limit('bytes', le, 'Max bytes')(bound, message);
+const notBytes = (bound, message) => limit('bytes', ne, 'Not bytes')(bound, message);
+const codePoints = (bound, message) => limit('codePoints', eq, 'Code points')(bound, message);
+const minCodePoints = (bound, message) => limit('codePoints', ge, 'Min code points')(bound, message);
+const maxCodePoints = (bound, message) => limit('codePoints', le, 'Max code points')(bound, message);
+const notCodePoints = (bound, message) => limit('codePoints', ne, 'Not code points')(bound, message);
+const graphemes = (bound, message) => limit('graphemes', eq, 'Graphemes')(bound, message);
+const minGraphemes = (bound, message) => limit('graphemes', ge, 'Min graphemes')(bound, message);
+const maxGraphemes = (bound, message) => limit('graphemes', le, 'Max graphemes')(bound, message);
+const notGraphemes = (bound, message) => limit('graphemes', ne, 'Not graphemes')(bound, message);
+const words = (bound, message) => limit('words', eq, 'Words')(bound, message);
+const minWords = (bound, message) => limit('words', ge, 'Min words')(bound, message);
+const maxWords = (bound, message) => limit('words', le, 'Max words')(bound, message);
+const notWords = (bound, message) => limit('words', ne, 'Not words')(bound, message);
+const size = (bound, message) => limit('size', eq, 'Size')(bound, message);
+const minSize = (bound, message) => limit('size', ge, 'Min size')(bound, message);
+const maxSize = (bound, message) => limit('size', le, 'Max size')(bound, message);
+const notSize = (bound, message) => limit('size', ne, 'Not size')(bound, message);
+const entries = (bound, message) => limit('entries', eq, 'Entries')(bound, message);
+const minEntries = (bound, message) => limit('entries', ge, 'Min entries')(bound, message);
+const maxEntries = (bound, message) => limit('entries', le, 'Max entries')(bound, message);
+const notEntries = (bound, message) => limit('entries', ne, 'Not entries')(bound, message);
+const minValue = (bound, message) => limit('value', ge, 'Min value')(bound, message);
+const maxValue = (bound, message) => limit('value', le, 'Max value')(bound, message);
+const gtValue = (bound, message) => limit('value', gt, 'Greater than')(bound, message);
+const ltValue = (bound, message) => limit('value', lt, 'Less than')(bound, message);
 
 // --- item collections ------------------------------------------------------
 const everyItem = (fn, message = 'Invalid item') => v =>
@@ -281,7 +285,6 @@ const toMaxValue = max => tx(v => Math.min(v, max));
 const parseJson = reviver => tx(v => typeof v === 'string' ? JSON.parse(v, reviver) : v);
 const stringifyJson = (replacer, space) => tx(v => JSON.stringify(v, replacer, space));
 const rawTransform = fn => tx(fn);
-const transform = coreTransform;
 
 // --- composition / metadata ------------------------------------------------
 const pipe = (schema, ...actions) => (value, c) => {
@@ -299,12 +302,12 @@ const meta = key => (a, b) => {
   if (typeof a === 'function') { a[key] = b; return a; }
   return Object.assign(() => yes, { _meta: key, _value: a });
 };
-const title = meta('title');
-const description = meta('description');
-const metadata = meta('metadata');
-const examples = meta('examples');
-const brand = meta('brand');
-const flavor = meta('flavor');
+const title = (a, b) => meta('title')(a, b);
+const description = (a, b) => meta('description')(a, b);
+const metadata = (a, b) => meta('metadata')(a, b);
+const examples = (a, b) => meta('examples')(a, b);
+const brand = (a, b) => meta('brand')(a, b);
+const flavor = (a, b) => meta('flavor')(a, b);
 const readonly = schema => Object.assign(schema, { readonly: true });
 const args = (...schemas) => coreTuple(schemas);
 const returns = schema => fn => function (...params) {
@@ -317,23 +320,23 @@ const returns = schema => fn => function (...params) {
 
 // --- production gaps: formats, defaults, error helpers ---------------------
 // Extra formats that are cheap and commonly needed at API/DB boundaries.
-const alpha = fmt('letters', v => typeof v === 'string' && /^[A-Za-z]+$/.test(v));
-const alphaNumeric = fmt('letters and digits', v => typeof v === 'string' && /^[A-Za-z0-9]+$/.test(v));
-const lowercase = fmt('lowercase', v => typeof v === 'string' && v === v.toLowerCase());
-const uppercase = fmt('uppercase', v => typeof v === 'string' && v === v.toUpperCase());
-const ascii = fmt('ASCII', v => typeof v === 'string' && /^[\x00-\x7F]*$/.test(v));
-const semver = fmt('semver', v => typeof v === 'string' &&
-  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(v));
-const json = fmt('JSON', v => {
+const alpha = (message) => fmt('letters', v => typeof v === 'string' && /^[A-Za-z]+$/.test(v))(message);
+const alphaNumeric = (message) => fmt('letters and digits', v => typeof v === 'string' && /^[A-Za-z0-9]+$/.test(v))(message);
+const lowercase = (message) => fmt('lowercase', v => typeof v === 'string' && v === v.toLowerCase())(message);
+const uppercase = (message) => fmt('uppercase', v => typeof v === 'string' && v === v.toUpperCase())(message);
+const ascii = (message) => fmt('ASCII', v => typeof v === 'string' && /^[\x00-\x7F]*$/.test(v))(message);
+const semver = (message) => fmt('semver', v => typeof v === 'string' &&
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(v))(message);
+const json = (message) => fmt('JSON', v => {
   if (typeof v !== 'string') return false;
   try { JSON.parse(v); return true; } catch { return false; }
-});
+})(message);
 
 // Numeric / date shorthand constraints.
-const positive = fmt('positive number', v => typeof v === 'number' && Number.isFinite(v) && v > 0);
-const negative = fmt('negative number', v => typeof v === 'number' && Number.isFinite(v) && v < 0);
-const nonNegative = fmt('non-negative number', v => typeof v === 'number' && Number.isFinite(v) && v >= 0);
-const nonPositive = fmt('non-positive number', v => typeof v === 'number' && Number.isFinite(v) && v <= 0);
+const positive = (message) => fmt('positive number', v => typeof v === 'number' && Number.isFinite(v) && v > 0)(message);
+const negative = (message) => fmt('negative number', v => typeof v === 'number' && Number.isFinite(v) && v < 0)(message);
+const nonNegative = (message) => fmt('non-negative number', v => typeof v === 'number' && Number.isFinite(v) && v >= 0)(message);
+const nonPositive = (message) => fmt('non-positive number', v => typeof v === 'number' && Number.isFinite(v) && v <= 0)(message);
 const inRange = (min, max, message = `Must be between ${min} and ${max}`) => v =>
   typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? yes : message;
 const dateValue = v => v instanceof Date ? v.getTime()
@@ -349,7 +352,7 @@ const maxDate = (bound, message = `Max date ${String(bound)}`) => v => {
 };
 
 // Collection checks / transforms.
-const uniqueItems = fmt('unique items', v => Array.isArray(v) && new Set(v).size === v.length);
+const uniqueItems = (message) => fmt('unique items', v => Array.isArray(v) && new Set(v).size === v.length)(message);
 const toUnique = () => tx(v => Array.isArray(v) ? [...new Set(v)] : v);
 const compactItems = () => tx(v => Array.isArray(v) ? v.filter(x => x != null) : v);
 const reverseItems = () => tx(v => Array.isArray(v) ? [...v].reverse() : v);
@@ -393,7 +396,7 @@ export {
   cuid2, decimal, description, digits, domain, email, emoji, empty, endsWith,
   entries, everyItem, examples, excludes, filterItems, findItem, finite, flavor,
   graphemes, gtValue, guard, hash, hexadecimal, hexColor, imei, includes,
-  integer, ip, ipv4, ipv6, isbn, isrc, isoDate, isoDateTime, isoDateTimeSecond,
+  integerCheck, ip, ipv4, ipv6, isbn, isrc, isoDate, isoDateTime, isoDateTimeSecond,
   isoTime, isoTimeSecond, isoTimestamp, isoWeek, jwsCompact, ksuid, length,
   ltValue, mac, mac48, mac64, mapItems, maxBytes, maxCodePoints, maxEntries,
   maxGraphemes, maxLength, maxSize, maxValue, maxWords, metadata, mimeType,
@@ -405,7 +408,7 @@ export {
   safeInteger, size, slug, someItem, sortItems, startsWith, stringifyJson,
   title, toBigint, toBoolean, toCamelCase, toDate, toKebabCase, toLowerCase,
   toMaxValue, toMinValue, toNumber, toPascalCase, toSnakeCase, toString,
-  toUpperCase, transform, trim, trimEnd, trimStart, ulid, url, uuid, value,
+  toUpperCase, trim, trimEnd, trimStart, ulid, url, uuid, value,
   values, words,
   alpha, alphaNumeric, lowercase, uppercase, ascii, semver, json,
   positive, negative, nonNegative, nonPositive, inRange, minDate, maxDate,
@@ -413,3 +416,7 @@ export {
   toTitleCase, truncate, padStart, padEnd, replace,
   fallback, message, flatten, nonNullable, nonOptional, nonNullish
 };
+
+// The core transform is re-exported by binding, not copied: utilities and the
+// core must hand out the same function.
+export { transform } from './index.js';

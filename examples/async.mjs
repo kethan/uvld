@@ -2,8 +2,7 @@
 // async transform, a lazy fallback, timeout and the resolveAsync pattern.
 // In your project import from 'uvld/async'.
 import assert from 'node:assert/strict';
-import { string, object, array, safeParse } from '../src/index.js';
-import { email, toLowerCase } from '../src/utils.js';
+import { string, object, array, safeParse, email, toLowerCase } from '../src/index.js';
 import {
   objectAsync, checkAsync, safeParseAsync, parseAsync, pipeAsync,
   transformAsync, fallbackAsync, resolveAsync

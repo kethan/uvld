@@ -15,7 +15,7 @@ const rejects = (check: CheckFn, value: unknown, message?: string) => {
 // All 128 names requested by the original feature list.
 const REQUESTED = (`args base64 bic brand bytes check checkItems codePoints creditCard cuid2 decimal
 description digits domain email emoji empty endsWith entries everyItem examples excludes filterItems
-findItem finite flavor graphemes gtValue guard hash hexadecimal hexColor imei includes integer ip
+findItem finite flavor graphemes gtValue guard hash hexadecimal hexColor imei includes integerCheck ip
 ipv4 ipv6 isbn isrc isoDate isoDateTime isoDateTimeSecond isoTime isoTimeSecond isoTimestamp
 isoWeek jwsCompact ksuid length ltValue mac mac48 mac64 mapItems maxBytes maxCodePoints maxEntries
 maxGraphemes maxLength maxSize maxValue maxWords metadata mimeType minBytes minCodePoints
@@ -47,10 +47,32 @@ describe('utils entry point', () => {
     expect(U.transform).toBe(coreTransform);
   });
 
-  test('utils are tree-shakeable: core is not bundled into the utils entry', async () => {
+  test('utilities are lazy factories, so an unused one is dropped by bundlers', async () => {
     const { readFileSync } = await import('node:fs');
     const source = readFileSync(new URL('../src/utils.js', import.meta.url), 'utf8');
-    expect(source).toContain("from './index.js'");
+    // A module-level `fmt(...)` / `limit(...)` / `meta(...)` call looks
+    // side-effectful to esbuild and webpack, dragging every utility into any
+    // bundle that imports the core. Each export is an arrow that builds the
+    // check on call instead.
+    expect(source).not.toMatch(/^const \w+ = (fmt|limit|meta)\(/m);
+    expect(source.match(/^const \w+ = \([^)]*\) => (fmt|limit|meta)\(/gm)).toHaveLength(91);
+  });
+
+  test('the main entry exposes the utilities next to the core', async () => {
+    const V = await import('../src/index');
+    expect(V.email).toBe(U.email);
+    expect(V.integerCheck).toBe(U.integerCheck);
+    expect(V.integerCheck()(4)).toBe(true);
+    expect(typeof V.integer).toBe('function');     // core schema factory
+    expect(V.integer.name ?? '').not.toBe('integerCheck');
+    expect(V.transform).toBe(U.transform);
+  });
+
+  test('the utils *subpath* is a re-export of the main entry', async () => {
+    const { readFileSync } = await import('node:fs');
+    const shim = readFileSync(new URL('../src/utils-entry.js', import.meta.url), 'utf8');
+    expect(shim).toContain("export * from './index.js'");
+    expect(shim).toContain('integerCheck as integer');
   });
 });
 
@@ -156,7 +178,7 @@ describe('measurement constraints', () => {
     rejects(not(n), value);
   });
 
-  test('gtValue / ltValue / multipleOf / finite / integer / safeInteger', () => {
+  test('gtValue / ltValue / multipleOf / finite / integerCheck / safeInteger', () => {
     accepts(U.gtValue(9), 10);
     rejects(U.gtValue(10), 10);
     accepts(U.ltValue(11), 10);
@@ -166,8 +188,8 @@ describe('measurement constraints', () => {
     accepts(U.finite(), 1);
     rejects(U.finite(), Infinity);
     rejects(U.finite(), NaN);
-    accepts(U.integer(), 4);
-    rejects(U.integer(), 4.2);
+    accepts(U.integerCheck(), 4);
+    rejects(U.integerCheck(), 4.2);
     accepts(U.safeInteger(), Number.MAX_SAFE_INTEGER);
     rejects(U.safeInteger(), Number.MAX_SAFE_INTEGER + 1);
   });

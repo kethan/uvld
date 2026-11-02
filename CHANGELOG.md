@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.2.0 (2026-11-02)
+
+Every synchronous validator now ships from the single `uvld` entry point.
+Additive: `import ... from 'uvld'` gains 158 names and every 1.x import keeps
+working.
+
+### Changed
+
+- **Utilities moved into `uvld`.** `import { string, email, pipe } from 'uvld'`
+  replaces the second `uvld/utils` import. `uvld/utils` stays as a 73-byte
+  re-export shim, so existing code needs no change. The utilities' integer
+  **check** is exported as `integerCheck` from `uvld` — `integer()` is the core
+  schema factory — while `uvld/utils` still exports it as `integer`.
+- **Every utility factory is lazy**, like the core primitives: `fmt()`,
+  `limit()` and `meta()` run when a check is requested, not at module load.
+  Without this, esbuild and webpack keep every utility in any bundle that
+  imports the core (a one-schema import cost 2.8 kB gzip instead of 530 B).
+  The utilities' `transform` is re-exported by binding rather than copied, so
+  `uvld.transform === require('uvld/utils').transform` and there is no
+  top-level circular read.
+- **Bundle sizes.** One file now carries the core plus all utilities:
+  `dist/index.js` 18,973 B / 6,706 B gzip (was 4,530 / 1,935), `index.cjs`
+  18,811 / 6,076 (was 4,585 / 1,818), `index.min.js` 17,684 / 6,018 (was
+  4,392 / 1,797). Only CJS and IIFE consumers pay that growth, because only ESM
+  tree-shakes: `is(string(), 1)` is still 517 B gzip with Rollup and 529 B with
+  esbuild, and a lone `email()` is 154 / 160 B. `uvld/utils` shrinks from
+  13,608 B to 73 B since it no longer duplicates the utilities.
+- **`uvld/async` is unchanged** and still opt-in, but it imports the unified
+  core, so `require('uvld/async')` now loads the utilities along with it.
+- Size budgets track the new bundle shape; the shim gets tiny budgets of its
+  own so it cannot quietly grow back into a second copy.
+
 ## 1.1.1 (2026-11-02)
 
 ### Fixed

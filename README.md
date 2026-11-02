@@ -4,7 +4,7 @@
 
 **uvld** validates unknown data in JavaScript and TypeScript: one small function per type, composed into schemas, with structured errors and static type inference.
 
-- **Zero runtime dependencies.** 38 core exports (~4.5 kB minified / ~1.9 kB gzip), **158 opt-in utilities** in `uvld/utils` and **21 await-aware exports** in `uvld/async`. Both extras are separate tree-shakeable entries that never bundle core code.
+- **One entry, zero runtime dependencies.** 38 core schemas and 157 utilities (195 exports) from a single `uvld` import, plus **21 await-aware exports** in the separate `uvld/async` entry. Everything is a lazy factory, so bundlers drop what you do not use: `is(string(), 1)` compiles to ~517 B gzip.
 - **Correct by default.** Finite numbers, own properties, symbol keys, safe unions, exception-safe parsing.
 - **TypeScript-first.** `Infer<typeof schema>`, a real `is()` type guard, declarations shipped with the package.
 - **Uniform API.** Every validator factory takes `(message?, validations?)`.
@@ -226,7 +226,7 @@ Runnable, assert-based examples live in [`examples/`](examples/). Run them all w
 | [`errors.mjs`](examples/errors.mjs) | issue shape, `VError`, trapped validator exceptions |
 | [`transform.mjs`](examples/transform.mjs) | trimming/coercion with `transform` |
 | [`records.mjs`](examples/records.mjs) | records, symbol keys, `Map`, `Set`, nested arrays |
-| [`utils.mjs`](examples/utils.mjs) | `uvld/utils`: format checks, constraints, transforms, `pipe` |
+| [`utils.mjs`](examples/utils.mjs) | utilities: format checks, constraints, transforms, `pipe` |
 | [`typescript.ts`](examples/typescript.ts) | static inference (compile-only) |
 
 A few compact recipes:
@@ -247,20 +247,21 @@ const Body = strict({ token: string(), amount: number() });
 
 ---
 
-## Utilities — `uvld/utils`
+## Utilities
 
-The core stays tiny. All of the extra validators, constraints, transforms and
-helpers live in a **separate, opt-in entry point**, so importing them never adds
-a byte to the core `uvld` bundle. Use `uvld/utils` when you need them; a bundler
-tree-shakes everything you do not import.
+Format checks, constraints, transforms, `pipe` and the metadata helpers are
+named exports of the same `uvld` entry point — no second import to learn.
+`uvld/utils` still works and re-exports the same module for 1.x code.
 
 ```bash
 npm i uvld
 ```
 
 ```js
-import { string, number, object, safeParse, parse } from 'uvld';
-import { email, minLength, uuid, ipv4, trim, pipe, toLowerCase } from 'uvld/utils';
+import {
+  string, number, object, safeParse, parse,
+  email, minLength, uuid, ipv4, trim, pipe, toLowerCase
+} from 'uvld';
 
 // Checks drop straight into a core `validations` array …
 const Email = string('Expected text', [email('Invalid email'), minLength(6)]);
@@ -273,6 +274,11 @@ uuid()('550e8400-e29b-41d4-a716-446655440000'); // true
 const CleanEmail = pipe(string(), trim(), toLowerCase(), email());
 parse(CleanEmail, '  ADA@Example.COM  '); // 'ada@example.com'
 ```
+
+One naming note: the utilities' integer **check** is exported as `integerCheck`
+from `uvld`, because `integer()` is the core schema factory:
+`number('', [integerCheck()])`. The `uvld/utils` subpath still calls it
+`integer` and re-exports everything else unchanged.
 
 ### Two kinds of utility
 
@@ -463,7 +469,7 @@ See [`examples/async.mjs`](examples/async.mjs) and
 </script>
 ```
 
-Or use an ESM CDN: `https://esm.sh/uvld`. CommonJS works too: `const { string } = require('uvld');`. The `uvld/utils` entry point ships as ESM + CJS (no IIFE build) and works with `node16`/`nodenext`, `bundler` and legacy `node10` TypeScript resolution.
+Or use an ESM CDN: `https://esm.sh/uvld`. CommonJS works too: `const { string, email } = require('uvld');`. The `uvld/utils` compatibility shim and `uvld/async` ship as ESM + CJS (no IIFE build) and work with `node16`/`nodenext`, `bundler` and legacy `node10` TypeScript resolution.
 
 ---
 
@@ -473,45 +479,49 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 | Bundle | Raw | gzip | brotli |
 | --- | ---: | ---: | ---: |
-| `dist/index.js` (ESM) | 4,530 B | 1,935 B | 1,779 B |
-| `dist/index.cjs` (CJS) | 4,585 B | 1,818 B | 1,669 B |
-| `dist/index.min.js` (IIFE) | 4,392 B | 1,797 B | 1,643 B |
-| `dist/utils.js` (ESM, opt-in) | 13,608 B | 5,073 B | 4,600 B |
-| `dist/utils.cjs` (CJS, opt-in) | 14,033 B | 4,916 B | 4,431 B |
+| `dist/index.js` (ESM) | 18,973 B | 6,706 B | 6,077 B |
+| `dist/index.cjs` (CJS) | 18,811 B | 6,076 B | 5,509 B |
+| `dist/index.min.js` (IIFE) | 17,684 B | 6,018 B | 5,462 B |
+| `dist/utils.js` (ESM, compat shim) | 73 B | 69 B | 57 B |
+| `dist/utils.cjs` (CJS, compat shim) | 316 B | 206 B | 157 B |
 | `dist/async.js` (ESM, opt-in) | 5,815 B | 1,968 B | 1,782 B |
 | `dist/async.cjs` (CJS, opt-in) | 5,856 B | 1,911 B | 1,722 B |
 
-`uvld/utils` and `uvld/async` are **separate entry points**: each imports the
-core as an external module (never duplicates it), so the core stays a single
-~4.5 kB file. Importing the extras adds nothing. Bundlers tree-shake the named
-ESM exports, so you only pay for what you import.
+`uvld` is a **single entry**: the core and all utilities live in one file, so
+there is one import and no duplication between entries. `uvld/utils` is a
+73-byte re-export kept for 1.x imports. `uvld/async` is the only other entry
+point; it imports the core as an external module and never duplicates it.
+Bundlers tree-shake the named ESM exports, so you only pay for what you import
+— but CJS `require('uvld')` and the IIFE build load the whole file.
 
-- Raw ESM bytes are **29% lower** than 0.0.1 (6,422 B unminified); there are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs).
-- Compressed core size is slightly larger than the 0.0.1 minified CDN build (~1.27 kB gzip) because 1.0.0 fixes ~20 correctness defects — symbol-key/own-property handling, context propagation, exception safety and path encoding. The size budget stops it growing further.
-- The published tarball is larger than 0.0.1's because it now ships the utils + async bundles, their declarations and complete docs. The core bundle itself is still ~4.5 kB.
-- Bundlers can tree-shake the ESM builds. The core is synchronous and allocation-light with no schema compilation step; regex-heavy formats and async validation live only in the opt-in entries.
+- A tree-shaken one-schema import is **517 B gzip**, below the 0.0.1 minified CDN build (~1.27 kB) even though the library now does far more. The full file is larger because it carries all 157 utilities for `require` and CDN users.
+- There are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs).
+- The published tarball is roughly the same size as before: the utilities moved into the core bundle and `uvld/utils` became a shim, so nothing is shipped twice.
+- Bundlers can tree-shake the ESM build. The core is synchronous and allocation-light with no schema compilation step; async validation lives only in the opt-in async entry.
 - A depth guard (64 levels) prevents stack overflows on circular data.
 
-**Tree-shaking works, and it needs no bundler-specific flags.** The 13 primitive
-schemas are lazy factories: each export is a plain function that calls `define()`
-only when a consumer asks for a validator, so no schema is constructed at module
-load. Terser still merges them into one comma-separated `const` statement, but an
-unimported factory is now just an unreferenced arrow function, which esbuild and
+**Tree-shaking works for schemas *and* utilities, with no bundler-specific
+flags.** Every export is a lazy factory: the 13 core primitives call `define()`
+only when a consumer asks for a validator, and each utility calls `fmt()` /
+`limit()` / `meta()` the same way. Nothing is constructed at module load. Terser
+still merges the declarations into comma-separated `const` statements, but an
+unimported factory is just an unreferenced arrow function, which esbuild and
 webpack drop — no `/*#__PURE__*/` markers and no `preserve_annotations` Terser
 option. Measured for a real consumer:
 
 | import | Rollup (gzip) | esbuild (gzip) |
 |---|---:|---:|
-| `is(string(), 1)` | 520 B | 529 B |
+| `is(string(), 1)` | 517 B | 529 B |
 | `string` only | 423 B | 427 B |
-| `string` + `object` + `safeParse` | 825 B | 839 B |
-| `import * as uvld from 'uvld'` (no shaking possible) | 1,818 B | — |
+| `string` + `object` + `safeParse` | 821 B | 840 B |
+| `email` only (a utility) | 154 B | 160 B |
+| `import * as uvld from 'uvld'` (no shaking possible) | 6,021 B | — |
 
-That is 73–78% below the full core for a one-schema import, and the two bundlers
-now agree within ~2%. The lazy wrappers cost +156 raw / +16 gzip bytes on the ESM
-bundle versus 1.1.0, while CJS and IIFE shrink under gzip (−35 B and −38 B) at
-about +104 raw bytes each. `sideEffects: false` is declared, so a consumer that
-never imports `uvld` pays nothing at all.
+A one-schema import is ~92% below the full file, and the two bundlers agree
+within ~2%. CJS and IIFE cannot tree-shake, so `require('uvld')` and the CDN
+build pay for all 195 exports (~6.0 kB gzip); if that matters, import the ESM
+build or keep using the `uvld/utils` shim with an ESM bundler. `sideEffects:
+false` is declared, so a consumer that never imports `uvld` pays nothing at all.
 
 ---
 

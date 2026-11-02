@@ -25,8 +25,8 @@ const fail = (schema: Validator<any>, value: unknown): VError => {
 };
 
 describe('public surface', () => {
-  test('exports all 38 runtime symbols, including define and unknown', () => {
-    expect(Object.keys(uvld)).toHaveLength(38);
+  test('exports the full runtime surface, including define and unknown', () => {
+    expect(Object.keys(uvld)).toHaveLength(195);
     expect(typeof define).toBe('function');
     expect(typeof unknownSchema).toBe('function');
     expect(typeof VError).toBe('function');

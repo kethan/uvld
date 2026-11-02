@@ -33,7 +33,10 @@ try {
 import * as uvld from 'uvld';
 const r = uvld.safeParse(uvld.object({ name: uvld.string() }), { name: 'ok' });
 if (!r.success || r.data.name !== 'ok') throw new Error('ESM safeParse failed');
-if (Object.keys(uvld).length !== 38) throw new Error('unexpected export count: ' + Object.keys(uvld).length);
+if (Object.keys(uvld).length !== 195) throw new Error('unexpected export count: ' + Object.keys(uvld).length);
+if (uvld.email()('ada@example.com') !== true) throw new Error('utilities are not exported from the main entry');
+if (uvld.integerCheck()(4) !== true) throw new Error('integerCheck missing from the main entry');
+if (typeof uvld.integer !== 'function' || typeof uvld.integerCheck !== 'function') throw new Error('integer names collided');
 console.log('ESM import: OK (' + Object.keys(uvld).length + ' exports)');
 `);
 
@@ -42,6 +45,7 @@ const uvld = require('uvld');
 const r = uvld.safeParse(uvld.string(), 'ok');
 if (!r.success || r.data !== 'ok') throw new Error('CJS safeParse failed');
 if (!require.resolve('uvld').endsWith('index.cjs')) throw new Error('require resolved to the wrong file');
+if (uvld.email()('ada@example.com') !== true) throw new Error('utilities are not exported from the main entry (CJS)');
 console.log('CJS require: OK (' + require.resolve('uvld') + ')');
 `);
 
@@ -61,6 +65,7 @@ console.log('utils ESM import: OK');
 const u = require('uvld/utils');
 const core = require('uvld');
 if (u.email()('a@b.com') !== true) throw new Error('utils CJS failed');
+if (u.integer()(4) !== true) throw new Error('utils subpath must keep integer as the check');
 if (core.parse(u.fallback(core.string(), 'guest'), 1) !== 'guest') throw new Error('utils fallback CJS failed');
 if (!core.safeParse(core.string(), 'ok').success) throw new Error('core CJS failed');
 if (!require.resolve('uvld/utils').endsWith('utils.cjs')) throw new Error('utils require resolved to the wrong file');
@@ -171,10 +176,10 @@ void e.issues;
   const sandbox = {};
   createContext(sandbox);
   runInContext(readFileSync(join(repo, 'dist/index.min.js'), 'utf8'), sandbox);
-  if (!sandbox.uvld || Object.keys(sandbox.uvld).length !== 38) {
+  if (!sandbox.uvld || Object.keys(sandbox.uvld).length !== 195) {
     throw new Error('IIFE build did not expose the uvld global');
   }
-  console.log('IIFE/browser global: OK (38 exports)');
+  console.log('IIFE/browser global: OK (195 exports)');
 
   const pkg = JSON.parse(readFileSync(join(consumer, 'node_modules/uvld/package.json'), 'utf8'));
   const targets = [

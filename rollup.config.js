@@ -34,6 +34,13 @@ const copy = (from, to) => ({
 
 const core = {
   input: 'src/index.js',
+  // `index.js` re-exports `utils.js`, which imports core helpers back. The
+  // cycle is binding-only — no module reads the other at evaluation time — so
+  // the single-chunk output is safe; don't warn about it on every build.
+  onwarn(warning, warn) {
+    if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.message.includes('utils.js')) return;
+    warn(warning);
+  },
   plugins: [copy('src/index.d.ts', 'dist/index.d.ts')],
   output: [
     { file: 'dist/index.js', format: 'es', plugins: [esm] },
@@ -42,8 +49,10 @@ const core = {
   ]
 };
 
+// `uvld/utils` is a compatibility re-export of the main entry, so it stays a
+// few bytes and never duplicates the utilities.
 const utils = {
-  input: 'src/utils.js',
+  input: 'src/utils-entry.js',
   external: ['./index.js'],
   plugins: [copy('src/utils.d.ts', 'dist/utils.d.ts')],
   output: [

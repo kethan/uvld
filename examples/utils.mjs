@@ -1,12 +1,12 @@
-// Use case: the optional `uvld/utils` entry point — format checks, constraints,
-// transforms and `pipe`. In your project import from 'uvld/utils'.
+// Use case: utilities — format checks, constraints, transforms and `pipe`.
+// They ship from the main entry, so no extra import is needed.
 import assert from 'node:assert/strict';
-import { object, string, array, number, safeParse, parse } from '../src/index.js';
 import {
+  object, string, array, number, safeParse, parse,
   email, minLength, maxLength, trim, toLowerCase, pipe, uuid, url,
-  ipv4, creditCard, minValue, maxValue, integer, mapItems,
+  ipv4, creditCard, minValue, maxValue, integerCheck, mapItems,
   fallback, flatten, semver, positive, uniqueItems, toUnique
-} from '../src/utils.js';
+} from '../src/index.js';
 
 export function run() {
   // 1. Checks drop straight into a core `validations` array.
@@ -30,7 +30,7 @@ export function run() {
     id: string('', [uuid()]),
     name: string('', [minLength(2), maxLength(60)]),
     price: number('', [minValue(0), maxValue(10000)]),
-    stock: number('', [integer()]),
+    stock: number('', [integerCheck()]),
     tags: array(string())
   });
   const product = {

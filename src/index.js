@@ -237,3 +237,9 @@ export {
   or, and, not, lazy, transform,
   is, parse, safeParse, VError
 };
+
+// Optional utilities ship from this same entry point — one import surface,
+// `import { email, string } from 'uvld'`. The module boundaries stay in the
+// source; Rollup emits a single file. Every utility is a lazy factory (see
+// `utils.js`), so a consumer that never touches them pays no bytes.
+export * from './utils.js';

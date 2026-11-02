@@ -5,10 +5,20 @@ import { fileURLToPath } from 'node:url';
 const at = (p: string) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 const read = (p: string) => readFileSync(at(p), 'utf8');
 
+const utilsExports = (): string[] => {
+  const block = read('src/utils.js').match(/export\s*\{([\s\S]*?)\};/);
+  expect(block).not.toBeNull();
+  return block![1].split(',').map(s => s.trim()).filter(Boolean).sort();
+};
+
+// `uvld` re-exports the utils module, whose `integer` check is renamed
+// `integerCheck` so it can sit next to the core `integer()` factory.
 const runtimeExports = (): string[] => {
   const block = read('src/index.js').match(/export\s*\{([\s\S]*?)\};/);
   expect(block).not.toBeNull();
-  return block![1].split(',').map(s => s.trim()).filter(Boolean).sort();
+  const names = new Set(block![1].split(',').map(s => s.trim()).filter(Boolean));
+  for (const name of utilsExports()) names.add(name === 'integer' ? 'integerCheck' : name);
+  return [...names].sort();
 };
 
 const declaredValues = (): string[] => {
@@ -21,17 +31,6 @@ const declaredTypes = (): string[] => {
   const dts = read('src/index.d.ts');
   return [...dts.matchAll(/^export (?:type|interface)\s+([A-Za-z_$][\w$]*)/gm)]
     .map(m => m[1]).sort();
-};
-
-const utilsExports = (): string[] => {
-  const block = read('src/utils.js').match(/export\s*\{([\s\S]*?)\};/);
-  expect(block).not.toBeNull();
-  return block![1].split(',').map(s => s.trim()).filter(Boolean).sort();
-};
-
-const declaredUtils = (): string[] => {
-  const dts = read('src/utils.d.ts');
-  return [...dts.matchAll(/^export const\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1]).sort();
 };
 
 const asyncExports = (): string[] => {
@@ -75,7 +74,7 @@ padEnd replace fallback message flatten nonNullable nonOptional nonNullish`)
 describe('API surface stays in sync', () => {
   test('every runtime export is declared in index.d.ts and vice versa', () => {
     const runtime = runtimeExports();
-    expect(runtime).toHaveLength(38);
+    expect(runtime).toHaveLength(195); // 38 core + 158 utils − duplicate `transform`
     expect(declaredValues()).toEqual(runtime);
   });
 
@@ -98,14 +97,26 @@ describe('API surface stays in sync', () => {
     expect(readme).toMatch(/uvld\/async/);
   });
 
-  test('utils entry point: runtime exports match declarations and the feature list', () => {
+  test('the utils module still exports the full 1.x feature list', () => {
     const runtime = utilsExports();
-    expect(runtime).toHaveLength(158); // 128 requested + 29 additions + pipe
+    expect(runtime).toHaveLength(157); // 158 minus `transform`, re-exported below
     expect(UTILS_NAMES).toHaveLength(128);
     expect(PROD_ADDITIONS).toHaveLength(29);
-    expect([...UTILS_NAMES, ...PROD_ADDITIONS].filter(n => !runtime.includes(n))).toEqual([]);
-    expect(declaredUtils()).toEqual(runtime);
+    const legacyNames = [...UTILS_NAMES, ...PROD_ADDITIONS]
+      .map(n => n === 'integer' ? 'integerCheck' : n);
+    // `transform` is the core transform, re-exported by binding so that
+    // `utils.transform === transform` without a top-level circular read.
+    expect(read('src/utils.js')).toContain("export { transform } from './index.js'");
+    expect(legacyNames.filter(n => !runtime.includes(n) && n !== 'transform')).toEqual([]);
     expect(runtime).toContain('pipe');
+  });
+
+  test('the ./utils subpath is a compatibility re-export of the main entry', () => {
+    expect(read('src/index.js')).toContain("export * from './utils.js'");
+    expect(read('src/utils-entry.js')).toContain("export * from './index.js'");
+    expect(read('src/utils-entry.js')).toContain('integerCheck as integer');
+    expect(read('src/utils.d.ts')).toContain("export * from './index.js'");
+    expect(read('src/utils.d.ts')).toContain('integerCheck as integer');
   });
 
   test('async entry point: runtime exports match declarations', () => {
@@ -115,8 +126,9 @@ describe('API surface stays in sync', () => {
     expect(declaredAsync()).toEqual(asyncExports());
   });
 
-  test('async and utils entries keep the core external', () => {
+  test('async and the utils compat entry keep the core external', () => {
     expect(read('src/async.js')).toContain("from './index.js'");
+    expect(read('src/utils-entry.js')).toContain("from './index.js'");
     expect(read('src/utils.js')).toContain("from './index.js'");
   });
 
@@ -138,8 +150,10 @@ describe('API surface stays in sync', () => {
     expect(read('src/index.js')).not.toContain('let out;');
   });
 
-  test('utils does not import a bundled copy of the core', () => {
-    expect(read('src/utils.js')).toContain("from './index.js'");
+  test('utilities are lazy factories, like the core primitives', () => {
+    const src = read('src/utils.js');
+    expect(src).not.toMatch(/^const \w+ = (fmt|limit|meta)\(/m);
+    expect(src.match(/^const \w+ = \([^)]*\) => (fmt|limit|meta)\(/gm)).toHaveLength(91);
   });
 
   test('primitive factories are lazy, so unused ones tree-shake without markers', () => {
@@ -200,7 +214,7 @@ describe('package manifest', () => {
     expect(p.sideEffects).toBe(false);
     expect(p.files).toContain('dist');
     expect(p.engines.node).toBeTruthy();
-    expect(p.version).toBe('1.1.1');
+    expect(p.version).toBe('1.2.0');
     expect(p.keywords.length).toBeGreaterThan(3);
   });
 

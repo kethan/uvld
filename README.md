@@ -515,13 +515,25 @@ option. Measured for a real consumer:
 | `string` only | 423 B | 427 B |
 | `string` + `object` + `safeParse` | 821 B | 840 B |
 | `email` only (a utility) | 154 B | 160 B |
+| `email` + `minLength` + `nonEmpty` + `object` + `string` + `pipe` | 1,277 B | 1,286 B |
 | `import * as uvld from 'uvld'` (no shaking possible) | 6,021 B | — |
 
 A one-schema import is ~92% below the full file, and the two bundlers agree
-within ~2%. CJS and IIFE cannot tree-shake, so `require('uvld')` and the CDN
-build pay for all 195 exports (~6.0 kB gzip); if that matters, import the ESM
-build or keep using the `uvld/utils` shim with an ESM bundler. `sideEffects:
-false` is declared, so a consumer that never imports `uvld` pays nothing at all.
+within ~2%. For scale: the import list from valibot's bundle-size example —
+`email, minLength, nonEmpty, object, string, pipe` — is 2,771 B minified /
+1,286 B gzip for uvld, against 3,536 B / 1,397 B gzip for valibot 1.5.0 with the
+same toolchain (esbuild `--minify`, gzip level 9). `object, string, number,
+email, minLength` is 1,055 B vs 1,287 B gzip; `string, email` is 509 B vs 798 B.
+
+Before 1.2.0 that six-name import cost **3,221 B gzip**: the separate
+`uvld/utils` bundle made module-level `fmt(...)` calls, so esbuild kept every
+utility and a single `email` import pulled 2,444 B gzip of them. Lazy utilities
+are what fixed that — 155 B for `email` alone now.
+
+CJS and IIFE cannot tree-shake, so `require('uvld')` and the CDN build pay for
+all 195 exports (~6.0 kB gzip); if that matters, import the ESM build.
+`sideEffects: false` is declared, so a consumer that never imports `uvld` pays
+nothing at all.
 
 ---
 

@@ -17,9 +17,13 @@ working.
   `limit()` and `meta()` run when a check is requested, not at module load.
   Without this, esbuild and webpack keep every utility in any bundle that
   imports the core (a one-schema import cost 2.8 kB gzip instead of 530 B).
-  The utilities' `transform` is re-exported by binding rather than copied, so
-  `uvld.transform === require('uvld/utils').transform` and there is no
-  top-level circular read.
+  It also fixes the 1.x `uvld/utils` bundle: with esbuild, the six-name set
+  from valibot's bundle-size example (`email, minLength, nonEmpty, object,
+  string, pipe`) cost 3,221 B gzip before and 1,286 B now, and a lone `email`
+  import drops from 2,444 B to 155 B. For the same six names, valibot 1.5.0
+  measures 1,397 B gzip with the same toolchain. The utilities' `transform` is
+  re-exported by binding rather than copied, so `uvld.transform ===
+  require('uvld/utils').transform` and there is no top-level circular read.
 - **Bundle sizes.** One file now carries the core plus all utilities:
   `dist/index.js` 18,973 B / 6,706 B gzip (was 4,530 / 1,935), `index.cjs`
   18,811 / 6,076 (was 4,585 / 1,818), `index.min.js` 17,684 / 6,018 (was

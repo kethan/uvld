@@ -54,22 +54,23 @@ const define = (type, validate) => (message = '', validations = []) => (value, c
 };
 
 // --- primitives -----------------------------------------------------------
-// `/*#__PURE__*/` marks each factory call as side-effect free so esbuild and
-// webpack can drop the schemas a consumer never imports. Bundlers that honour
-// it remove unused factories; without the annotation they keep them all.
-const string = /*#__PURE__*/define('string', v => typeof v === 'string');
-const boolean = /*#__PURE__*/define('boolean', v => typeof v === 'boolean');
-const number = /*#__PURE__*/define('number', v => typeof v === 'number' && Number.isFinite(v));
-const func = /*#__PURE__*/define('function', v => typeof v === 'function');
-const symbol = /*#__PURE__*/define('symbol', v => typeof v === 'symbol');
-const bigint = /*#__PURE__*/define('bigint', v => typeof v === 'bigint');
-const integer = /*#__PURE__*/define('integer', Number.isInteger);
-const date = /*#__PURE__*/define('date', v => v instanceof Date && !Number.isNaN(v.getTime()));
-const promise = /*#__PURE__*/define('promise', v => v != null && typeof v.then === 'function');
-const never = /*#__PURE__*/define('never', () => false);
-const any = /*#__PURE__*/define('any', () => true);
-const unknown = /*#__PURE__*/define('unknown', () => true);
-const nullish = /*#__PURE__*/define('nullish', v => v == null);
+// Each primitive is a plain function that calls `define()` when a consumer
+// asks for a validator, never at module load. An unused export is therefore
+// just an unreferenced arrow function, which every bundler drops; a module-level
+// `define(...)` call looks side-effectful and would be kept.
+const string = (message, validations) => define('string', v => typeof v === 'string')(message, validations);
+const boolean = (message, validations) => define('boolean', v => typeof v === 'boolean')(message, validations);
+const number = (message, validations) => define('number', v => typeof v === 'number' && Number.isFinite(v))(message, validations);
+const func = (message, validations) => define('function', v => typeof v === 'function')(message, validations);
+const symbol = (message, validations) => define('symbol', v => typeof v === 'symbol')(message, validations);
+const bigint = (message, validations) => define('bigint', v => typeof v === 'bigint')(message, validations);
+const integer = (message, validations) => define('integer', Number.isInteger)(message, validations);
+const date = (message, validations) => define('date', v => v instanceof Date && !Number.isNaN(v.getTime()))(message, validations);
+const promise = (message, validations) => define('promise', v => v != null && typeof v.then === 'function')(message, validations);
+const never = (message, validations) => define('never', () => false)(message, validations);
+const any = (message, validations) => define('any', () => true)(message, validations);
+const unknown = (message, validations) => define('unknown', () => true)(message, validations);
+const nullish = (message, validations) => define('nullish', v => v == null)(message, validations);
 
 // --- literals, classes, enums ---------------------------------------------
 const literal = (v, message = '', validations = []) =>

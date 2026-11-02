@@ -7,13 +7,16 @@
 - **Tree-shaking for esbuild and webpack.** Terser merges the 13 primitive
   schema factories into a single comma-separated `const` statement, so importing
   one schema dragged in all of them — a consumer doing `is(string(), 1)` shipped
-  708 B gzip instead of 544 B. Each factory call is now marked `/*#__PURE__*/`
-  and the ESM build preserves those annotations (`preserve_annotations: true`),
-  letting bundlers drop each unimported declarator. Measured for
-  `is(string(), 1)`: Rollup 521 B gzip, esbuild 544 B gzip — the two bundlers
-  now agree within ~5%, where esbuild previously lagged by 188 B. Cost: +169 raw
-  / +27 gzip bytes on `dist/index.js` (4,374 → 4,543 B). CJS and IIFE bundles
-  are unchanged; `sideEffects: false` was already declared.
+  708 B gzip instead of ~520 B. The primitives are now **lazy factories**: each
+  export is a plain function that calls `define()` when a validator is requested,
+  never at module load. An unimported factory is therefore just an unreferenced
+  arrow function, which every bundler drops — no `/*#__PURE__*/` markers and no
+  `preserve_annotations` Terser format option. Measured for `is(string(), 1)`:
+  Rollup 520 B gzip, esbuild 529 B gzip — the two bundlers now agree within ~2%,
+  where esbuild previously lagged by 188 B. Cost: +156 raw / +16 gzip bytes on
+  `dist/index.js` (4,374 → 4,530 B); CJS and IIFE gain ~104 raw bytes each but
+  shrink under gzip (1,853 → 1,818 B and 1,835 → 1,797 B). `sideEffects: false`
+  was already declared.
 
 ## 1.1.0 (2026-10-25)
 

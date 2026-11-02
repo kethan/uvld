@@ -7,11 +7,12 @@ import { gzipSync, brotliCompressSync } from 'node:zlib';
 
 const BUDGET = {
   // core (unchanged by the utils entry point)
-  // Allows the 13 /*#__PURE__*/ markers that make the ESM tree-shakeable for
-  // esbuild/webpack (+169 raw / +27 gzip vs 1.1.0).
-  'dist/index.js': { raw: 4600, gzip: 2000, brotli: 1830 },
-  'dist/index.cjs': { raw: 4600, gzip: 1900, brotli: 1750 },
-  'dist/index.min.js': { raw: 4400, gzip: 1900, brotli: 1750 },
+  // Lazy primitive factories make the ESM tree-shakeable for esbuild/webpack
+  // with no annotation markers or Terser format option (+156 raw / +16 gzip
+  // vs 1.1.0). CJS/IIFE grow slightly in raw bytes but shrink in gzip.
+  'dist/index.js': { raw: 4570, gzip: 1960, brotli: 1800 },
+  'dist/index.cjs': { raw: 4625, gzip: 1845, brotli: 1690 },
+  'dist/index.min.js': { raw: 4430, gzip: 1825, brotli: 1665 },
   // optional utils entry point
   'dist/utils.js': { raw: 14200, gzip: 5300, brotli: 4800 },
   'dist/utils.cjs': { raw: 14600, gzip: 5150, brotli: 4650 },

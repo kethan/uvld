@@ -57,16 +57,22 @@ const call = (s, value, c) => {
 
 // Uniform signature for the whole API:
 //   factory(message?: string, validations?: Validator[]): Validator
-const define = (type, validate) => (message = '', validations = []) => (value, c = ROOT) => {
-  if (c.depth > 64) return [issue('Too deep', type, value, c)];
-  if (!validate(value, c)) return [issue(message || `Expected ${type}, got ${typeOf(value)}`, type, value, c)];
-  // Most validators carry zero or one refinement; looping skips the closure
-  // and the arrays flatMap() would allocate on every single validation.
-  const n = validations.length;
-  if (n < 2) return n ? call(validations[0], value, c) : [];
-  const issues = [];
-  for (let i = 0; i < n; i++) issues.push(...call(validations[i], value, c));
-  return issues;
+const define = (type, validate) => (message = '', validations = []) => {
+  const fn = (value, c = ROOT) => {
+    if (c.depth > 64) return [issue('Too deep', type, value, c)];
+    if (!validate(value, c)) return [issue(message || `Expected ${type}, got ${typeOf(value)}`, type, value, c)];
+    // Most validators carry zero or one refinement; looping skips the closure
+    // and the arrays flatMap() would allocate on every single validation.
+    const n = validations.length;
+    if (n < 2) return n ? call(validations[0], value, c) : [];
+    const issues = [];
+    for (let i = 0; i < n; i++) issues.push(...call(validations[i], value, c));
+    return issues;
+  };
+  // What this validator checks, for the experimental compiler in compile.js.
+  // Costs one small array per schema at build time.
+  fn.meta = [type, validate, validations];
+  return fn;
 };
 
 // --- primitives -----------------------------------------------------------
@@ -139,8 +145,11 @@ const pairs = (keySchema, valueSchema, value, c, isMap) => {
   return issues;
 };
 
-const array = (schema, message = '', validations = []) =>
-  define('array', Array.isArray)(message, [(value, c) => items(schema, value, c), ...validations]);
+const array = (schema, message = '', validations = []) => {
+  const fn = define('array', Array.isArray)(message, [(value, c) => items(schema, value, c), ...validations]);
+  fn.item = schema;
+  return fn;
+};
 const set = (schema, message = '', validations = []) =>
   define('set', v => typeOf(v) === 'set')(message, [(value, c) => items(schema, value, c), ...validations]);
 const record = (keySchema, valueSchema, message = '', validations = []) =>
@@ -156,21 +165,24 @@ const map = (keySchema, valueSchema, message = '', validations = []) =>
 // validation was the largest single cost in object validation, but doing it in
 // the factory made schema creation measurably slower.
 const object = (schema, message = '', validations = [], exact = false) => {
-  let keys, suffixes;
-  return define('object', v => typeOf(v) === 'object')(message, [
+  let keys, fns, suffixes;
+  const prep = () => {
+    if (!keys) {
+      keys = Reflect.ownKeys(schema);
+      suffixes = keys.map(k => '[' + quoted(String(k)) + ']');
+      fns = keys.map(k => schema[k]);
+    }
+  };
+  const fn = define('object', v => typeOf(v) === 'object')(message, [
     (value, c) => {
-      if (!keys) {
-        keys = Reflect.ownKeys(schema);
-        suffixes = keys.map(k => '[' + quoted(String(k)) + ']');
-      }
+      prep();
       const issues = [];
       if (exact) {
         const extra = Reflect.ownKeys(value).filter(k => !keys.includes(k));
         if (extra.length) issues.push(issue(`Extra keys: ${extra.map(String).join(', ')}`, 'object', value, { ...c, origin: 'key' }));
       }
       for (let i = 0; i < keys.length; i++) {
-        const k = keys[i];
-        push(issues, call(schema[k], Object.hasOwn(value, k) ? value[k] : undefined, {
+        push(issues, call(fns[i], Object.hasOwn(value, keys[i]) ? value[keys[i]] : undefined, {
           path: c.path + suffixes[i], origin: 'value', depth: c.depth + 1, out: c.out
         }));
       }
@@ -178,6 +190,9 @@ const object = (schema, message = '', validations = [], exact = false) => {
     },
     ...validations
   ]);
+  fn.shape = () => (prep(), [keys, fns]);
+  fn.exact = exact;
+  return fn;
 };
 const strict = (schema, message = '', validations = []) => object(schema, message, validations, true);
 

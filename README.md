@@ -4,7 +4,7 @@
 
 **uvld** validates unknown data in JavaScript and TypeScript: one small function per type, composed into schemas, with structured errors and static type inference.
 
-- **One entry, zero runtime dependencies.** 38 core schemas and 157 utilities (195 exports) from a single `uvld` import, plus **21 await-aware exports** in the separate `uvld/async` entry. Everything is a lazy factory, so bundlers drop what you do not use: `is(string(), 1)` compiles to ~517 B gzip.
+- **One entry, zero runtime dependencies.** 38 core schemas and 157 utilities (195 exports) from a single `uvld` import, plus two opt-in subpaths: **`uvld/async`** (21 await-aware exports) and **`uvld/compile`** (a schema compiled into a plain boolean predicate — 2.1× faster than the interpreter on valid input). Everything is a lazy factory, so bundlers drop what you do not use: `is(string(), 1)` compiles to ~598 B gzip.
 - **Correct by default.** Finite numbers, own properties, symbol keys, safe unions, exception-safe parsing.
 - **TypeScript-first.** `Infer<typeof schema>`, a real `is()` type guard, declarations shipped with the package.
 - **Uniform API.** Every validator factory takes `(message?, validations?)`.
@@ -379,7 +379,7 @@ Notes: `hash(algorithm)` checks hex digests for md5/sha1/sha256/sha384/sha512;
 (`title(schema, 'Name')`) or act as metadata inside `pipe`.
 
 See [`examples/utils.mjs`](examples/utils.mjs) and
-[`tests/utils.spec.ts`](tests/utils.spec.ts) (99 tests) for runnable coverage.
+[`tests/utils.spec.ts`](tests/utils.spec.ts) (101 tests) for runnable coverage.
 
 ---
 
@@ -674,10 +674,10 @@ to allocate. Rejecting the invalid object is slower (~6 µs) than valibot becaus
 
 ```bash
 npm ci
-npm test             # vitest run (191 tests)
+npm test             # vitest run (210 tests)
 npm run typecheck    # tsc --noEmit over source types, tests and examples
-npm run examples     # run all 10 runnable examples
-npm run build        # ESM + CJS + IIFE bundles and dist/index.d.ts
+npm run examples     # run all 11 runnable examples
+npm run build        # ESM + CJS + IIFE bundles, subpath entries and declarations
 npm run size         # enforce the byte budget
 npm run smoke        # pack + install into a clean consumer; ESM/CJS/TS/IIFE checks
 npm run bench:install  # comparison libraries for benchmark/ (once)

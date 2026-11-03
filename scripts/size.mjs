@@ -8,11 +8,13 @@ import { gzipSync, brotliCompressSync } from 'node:zlib';
 const BUDGET = {
   // The single `uvld` entry: core + utilities (1.2.0). Every export is a lazy
   // factory, so tree-shaken ESM consumers still pay only for what they import
-  // (~520 B gzip for `is(string(), 1)`); these budgets cover the whole file,
+  // (~585 B gzip for `is(string(), 1)`); these budgets cover the whole file,
   // which CJS and IIFE consumers load in full.
-  'dist/index.js': { raw: 19100, gzip: 6760, brotli: 6130 },
-  'dist/index.cjs': { raw: 18950, gzip: 6130, brotli: 5560 },
-  'dist/index.min.js': { raw: 17820, gzip: 6070, brotli: 5510 },
+  // Raised for the 1.3.0 hot-path rework: +~540 B raw / +~200 B gzip buys a
+  // ~3.6x faster object validation (see benchmark/RESULTS.md).
+  'dist/index.js': { raw: 19600, gzip: 6950, brotli: 6250 },
+  'dist/index.cjs': { raw: 19450, gzip: 6300, brotli: 5730 },
+  'dist/index.min.js': { raw: 18300, gzip: 6240, brotli: 5660 },
   // legacy `uvld/utils` subpath — a re-export shim, not a second copy
   'dist/utils.js': { raw: 300, gzip: 200, brotli: 180 },
   'dist/utils.cjs': { raw: 600, gzip: 350, brotli: 300 },

@@ -11,7 +11,26 @@
   until all six libraries agree on the fixtures. `npm run bench:install &&
   npm run bench` writes `benchmark/RESULTS.md` and `RESULTS.json`. The
   checked-in run has uvld fastest to build the schema and smallest for the
-  tree-shaken import, but ~4.8× slower than zod on object validation.
+  tree-shaken import, within ~1.4× of zod and valibot on object validation.
+
+### Performance
+
+- **Object validation is ~3.6× faster** (4.1 µs → 1.1 µs for the benchmark's
+  five-field payload; a 100-item array goes 411 µs → 104 µs). Schema creation
+  and bundle size are unchanged in character: `object()` now computes its key
+  list and bracket-quoted path suffixes once, on first use, instead of calling
+  `Reflect.ownKeys()` and `JSON.stringify()` for every key on every validation;
+  `define()`, `items()`, `pairs()`, `tuple()`, `wrap()` and `and()` loop instead
+  of `flatMap()`, which removes a callback closure and an array per refinement;
+  and child contexts are built as plain literals instead of a spread.
+- **Costs ~540 B raw / ~200 B gzip** in the full bundle (`dist/index.js`
+  18,973 → 19,515 B raw, 6,706 → 6,913 B gzip), and ~45 B gzip on the smallest
+  tree-shaken import (`is(string(), 1)`: 517 → 585 B gzip). The byte budgets
+  were raised accordingly. Schema objects are read once, on first use, so keys
+  added to the schema object afterwards are no longer picked up.
+- **`safeParse` on invalid input is still dominated by `new VError`** (~3.3 µs
+  of the ~6 µs), which valibot avoids by returning a plain object. `is()` skips
+  error construction entirely when only a boolean is needed.
 
 ## 1.2.0 (2026-11-02)
 

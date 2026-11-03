@@ -479,9 +479,9 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 | Bundle | Raw | gzip | brotli |
 | --- | ---: | ---: | ---: |
-| `dist/index.js` (ESM) | 18,973 B | 6,706 B | 6,077 B |
-| `dist/index.cjs` (CJS) | 18,811 B | 6,076 B | 5,509 B |
-| `dist/index.min.js` (IIFE) | 17,684 B | 6,018 B | 5,462 B |
+| `dist/index.js` (ESM) | 19,515 B | 6,913 B | 6,227 B |
+| `dist/index.cjs` (CJS) | 19,354 B | 6,272 B | 5,704 B |
+| `dist/index.min.js` (IIFE) | 18,227 B | 6,215 B | 5,635 B |
 | `dist/utils.js` (ESM, compat shim) | 73 B | 69 B | 57 B |
 | `dist/utils.cjs` (CJS, compat shim) | 316 B | 206 B | 157 B |
 | `dist/async.js` (ESM, opt-in) | 5,815 B | 1,968 B | 1,782 B |
@@ -494,7 +494,7 @@ point; it imports the core as an external module and never duplicates it.
 Bundlers tree-shake the named ESM exports, so you only pay for what you import
 — but CJS `require('uvld')` and the IIFE build load the whole file.
 
-- A tree-shaken one-schema import is **517 B gzip**, below the 0.0.1 minified CDN build (~1.27 kB) even though the library now does far more. The full file is larger because it carries all 157 utilities for `require` and CDN users.
+- A tree-shaken one-schema import is **585 B gzip**, below the 0.0.1 minified CDN build (~1.27 kB) even though the library now does far more. The full file is larger because it carries all 157 utilities for `require` and CDN users.
 - There are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs).
 - The published tarball is roughly the same size as before: the utilities moved into the core bundle and `uvld/utils` became a shim, so nothing is shipped twice.
 - Bundlers can tree-shake the ESM build. The core is synchronous and allocation-light with no schema compilation step; async validation lives only in the opt-in async entry.
@@ -511,27 +511,30 @@ option. Measured for a real consumer:
 
 | import | Rollup (gzip) | esbuild (gzip) |
 |---|---:|---:|
-| `is(string(), 1)` | 517 B | 529 B |
-| `string` only | 423 B | 427 B |
-| `string` + `object` + `safeParse` | 821 B | 840 B |
-| `email` only (a utility) | 154 B | 160 B |
-| `email` + `minLength` + `nonEmpty` + `object` + `string` + `pipe` | 1,277 B | 1,286 B |
-| `import * as uvld from 'uvld'` (no shaking possible) | 6,021 B | — |
+| `is(string(), 1)` | 576 B | 585 B |
+| `string` only | 486 B | 490 B |
+| `string` + `object` + `safeParse` | 949 B | 977 B |
+| `email` only (a utility) | 155 B | 165 B |
+| `email` + `minLength` + `nonEmpty` + `object` + `string` + `pipe` | 1,044 B | 1,072 B |
+| `import * as uvld from 'uvld'` (no shaking possible) | 6,225 B | 7,020 B |
 
-A one-schema import is ~92% below the full file, and the two bundlers agree
-within ~2%. For scale: the import list from valibot's bundle-size example —
-`email, minLength, nonEmpty, object, string, pipe` — is 2,771 B minified /
-1,286 B gzip for uvld, against 3,536 B / 1,397 B gzip for valibot 1.5.0 with the
-same toolchain (esbuild `--minify`, gzip level 9). `object, string, number,
-email, minLength` is 1,055 B vs 1,287 B gzip; `string, email` is 509 B vs 798 B.
+A one-schema import is ~91% below the full file, and the two bundlers agree
+within ~2%. Valibot's own bundle-size example — `email, minLength, nonEmpty,
+object, string, pipe` — costs 2,335 B minified / 1,072 B gzip for uvld against
+2,220 B / 990 B for valibot 1.5.0 with the same toolchain (esbuild `--minify`,
+gzip level 9): that list is the one place uvld is now *larger*, because every
+utility is its own lazy factory on top of the shared `define`/`call` machinery
+while valibot composes a single flat pipe. On a real schema the order flips —
+the five-field object from the benchmark is 1,769 B gzip against valibot's
+1,891 B, and 1,701 B against 1,755 B with Rollup.
 
 Before 1.2.0 that six-name import cost **3,221 B gzip**: the separate
 `uvld/utils` bundle made module-level `fmt(...)` calls, so esbuild kept every
 utility and a single `email` import pulled 2,444 B gzip of them. Lazy utilities
-are what fixed that — 155 B for `email` alone now.
+are what fixed that — 165 B for `email` alone now.
 
 CJS and IIFE cannot tree-shake, so `require('uvld')` and the CDN build pay for
-all 195 exports (~6.0 kB gzip); if that matters, import the ESM build.
+all 195 exports (~6.2 kB gzip); if that matters, import the ESM build.
 `sideEffects: false` is declared, so a consumer that never imports `uvld` pays
 nothing at all.
 
@@ -544,23 +547,25 @@ time anything until every library agrees on the fixtures. The
 
 | library | create schema | validate object | user schema (gzip, esbuild) | user schema (gzip, Rollup) |
 | --- | ---: | ---: | ---: | ---: |
-| uvld 1.2.0 | 1.80 M ops/s | 320 k ops/s | **1,587 B** | **1,521 B** |
-| valibot 1.5.0 | 898 k ops/s | 1.36 M ops/s | 1,891 B | 1,755 B |
-| zod 4.6.7 | 18.5 k ops/s | 1.50 M ops/s | 93,135 B¹ | 23,638 B |
-| yup 1.7.1 | 28.7 k ops/s | 68 k ops/s | 13,639 B | 12,610 B |
-| joi 18.3.1 | 20.9 k ops/s | 180 k ops/s | 54,835 B | 53,321 B |
-| ajv 8.20.0 | 905 ops/s² | 6.64 M ops/s | 38,701 B | 37,554 B |
+| uvld 1.2.0 (next) | 869 k ops/s | 821 k ops/s | **1,769 B** | **1,701 B** |
+| valibot 1.5.0 | 502 k ops/s | 1.12 M ops/s | 1,891 B | 1,755 B |
+| zod 4.6.7 | 12.8 k ops/s | 1.19 M ops/s | 93,135 B¹ | 23,638 B |
+| yup 1.7.1 | 18.2 k ops/s | 52 k ops/s | 13,639 B | 12,610 B |
+| joi 18.3.1 | 15.5 k ops/s | 146 k ops/s | 54,835 B | 53,321 B |
+| ajv 8.20.0 | 770 ops/s² | 6.04 M ops/s | 38,701 B | 37,554 B |
 
 ¹ esbuild cannot tree-shake zod 4's namespace re-export (`export { z }`), so it
 keeps every locale; Rollup drops them. Both numbers are what a consumer of that
 bundler ships. ² ajv compiles the JSON Schema (~1 ms) and is measured on a fresh
 schema object each time, because it caches per object.
 
-The trade is visible: uvld builds the fastest and ships the smallest tree-shaken
-bundle of the six, but validates this object **~4.7× slower than zod and ~4.3×
-slower than valibot**. The difference is in the sync hot path — a context object
-and a path string per field, plus a `Reflect.ownKeys()` per validation — not in
-the design. That makes it the obvious next optimisation target; run
+uvld builds the fastest and ships the smallest tree-shaken bundle of the six,
+and validates this object **within ~1.4× of valibot and zod** — the hot path
+builds one context per field, reuses the key list and path suffixes computed on
+first use, and skips the closure plus array per refinement that `flatMap` used
+to allocate. Rejecting the invalid object is slower (~6 µs) than valibot because
+`safeParse` constructs a real `VError` for `.error`, which valibot does not;
+`is()` exists for the boolean-only path. Run
 `npm run bench:install && npm run bench` to reproduce.
 
 ---
@@ -588,7 +593,7 @@ the design. That makes it the obvious next optimisation target; run
 
 ```bash
 npm ci
-npm test             # vitest run (186 tests)
+npm test             # vitest run (191 tests)
 npm run typecheck    # tsc --noEmit over source types, tests and examples
 npm run examples     # run all 10 runnable examples
 npm run build        # ESM + CJS + IIFE bundles and dist/index.d.ts

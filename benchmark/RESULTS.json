@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-03T01:58:38.137Z",
+  "generatedAt": "2026-11-03T03:19:56.905Z",
   "environment": {
     "node": "v22.22.3",
     "platform": "linux",
@@ -76,158 +76,158 @@
   "runtime": {
     "create": {
       "uvld": {
-        "opsPerSec": 1803229,
-        "nsPerOp": 554.56
+        "opsPerSec": 868837,
+        "nsPerOp": 1150.96
       },
       "valibot": {
-        "opsPerSec": 898141,
-        "nsPerOp": 1113.41
+        "opsPerSec": 501614,
+        "nsPerOp": 1993.56
       },
       "yup": {
-        "opsPerSec": 28730,
-        "nsPerOp": 34806.28
+        "opsPerSec": 18228,
+        "nsPerOp": 54859.3
       },
       "joi": {
-        "opsPerSec": 20944,
-        "nsPerOp": 47745.88
+        "opsPerSec": 15476,
+        "nsPerOp": 64617.94
       },
       "zod": {
-        "opsPerSec": 18538,
-        "nsPerOp": 53942.48
+        "opsPerSec": 12848,
+        "nsPerOp": 77833.89
       },
       "ajv": {
-        "opsPerSec": 905,
-        "nsPerOp": 1105321.88
+        "opsPerSec": 770,
+        "nsPerOp": 1297933.31
       }
     },
     "valid": {
       "ajv": {
-        "opsPerSec": 6635413,
-        "nsPerOp": 150.71
+        "opsPerSec": 6042045,
+        "nsPerOp": 165.51
       },
       "zod": {
-        "opsPerSec": 1496133,
-        "nsPerOp": 668.39
+        "opsPerSec": 1193019,
+        "nsPerOp": 838.21
       },
       "valibot": {
-        "opsPerSec": 1363382,
-        "nsPerOp": 733.47
+        "opsPerSec": 1118409,
+        "nsPerOp": 894.13
       },
       "uvld": {
-        "opsPerSec": 319869,
-        "nsPerOp": 3126.28
+        "opsPerSec": 820453,
+        "nsPerOp": 1218.84
       },
       "joi": {
-        "opsPerSec": 179723,
-        "nsPerOp": 5564.11
+        "opsPerSec": 145684,
+        "nsPerOp": 6864.18
       },
       "yup": {
-        "opsPerSec": 68149,
-        "nsPerOp": 14673.81
+        "opsPerSec": 51534,
+        "nsPerOp": 19404.78
       }
     },
     "invalid": {
       "ajv": {
-        "opsPerSec": 5194514,
-        "nsPerOp": 192.51
+        "opsPerSec": 4506846,
+        "nsPerOp": 221.88
       },
       "valibot": {
-        "opsPerSec": 788437,
-        "nsPerOp": 1268.33
+        "opsPerSec": 751959,
+        "nsPerOp": 1329.86
       },
       "zod": {
-        "opsPerSec": 406028,
-        "nsPerOp": 2462.88
-      },
-      "joi": {
-        "opsPerSec": 161012,
-        "nsPerOp": 6210.73
+        "opsPerSec": 316542,
+        "nsPerOp": 3159.14
       },
       "uvld": {
-        "opsPerSec": 118838,
-        "nsPerOp": 8414.84
+        "opsPerSec": 155789,
+        "nsPerOp": 6418.94
+      },
+      "joi": {
+        "opsPerSec": 128372,
+        "nsPerOp": 7789.85
       },
       "yup": {
-        "opsPerSec": 13403,
-        "nsPerOp": 74609.9
+        "opsPerSec": 12370,
+        "nsPerOp": 80842.87
       }
     },
     "list": {
       "ajv": {
-        "opsPerSec": 85021,
-        "nsPerOp": 11761.75
+        "opsPerSec": 81428,
+        "nsPerOp": 12280.82
       },
       "zod": {
-        "opsPerSec": 15362,
-        "nsPerOp": 65095.66
+        "opsPerSec": 11257,
+        "nsPerOp": 88832.92
       },
       "valibot": {
-        "opsPerSec": 12596,
-        "nsPerOp": 79389.62
+        "opsPerSec": 10603,
+        "nsPerOp": 94309.45
       },
       "uvld": {
-        "opsPerSec": 3261,
-        "nsPerOp": 306664.5
+        "opsPerSec": 7676,
+        "nsPerOp": 130279.83
       },
       "joi": {
-        "opsPerSec": 1930,
-        "nsPerOp": 518233.08
+        "opsPerSec": 1467,
+        "nsPerOp": 681741.69
       },
       "yup": {
-        "opsPerSec": 650,
-        "nsPerOp": 1537905
+        "opsPerSec": 460,
+        "nsPerOp": 2175684.13
       }
     },
     "string": {
       "ajv": {
-        "opsPerSec": 33373190,
-        "nsPerOp": 29.96
-      },
-      "valibot": {
-        "opsPerSec": 21130895,
-        "nsPerOp": 47.32
+        "opsPerSec": 31160887,
+        "nsPerOp": 32.09
       },
       "uvld": {
-        "opsPerSec": 10724322,
-        "nsPerOp": 93.25
+        "opsPerSec": 19063749,
+        "nsPerOp": 52.46
+      },
+      "valibot": {
+        "opsPerSec": 18785233,
+        "nsPerOp": 53.23
       },
       "zod": {
-        "opsPerSec": 8919953,
-        "nsPerOp": 112.11
+        "opsPerSec": 7210441,
+        "nsPerOp": 138.69
       },
       "joi": {
-        "opsPerSec": 1952137,
-        "nsPerOp": 512.26
+        "opsPerSec": 1428653,
+        "nsPerOp": 699.96
       },
       "yup": {
-        "opsPerSec": 994959,
-        "nsPerOp": 1005.07
+        "opsPerSec": 666782,
+        "nsPerOp": 1499.74
       }
     },
     "email": {
       "ajv": {
-        "opsPerSec": 14242431,
-        "nsPerOp": 70.21
+        "opsPerSec": 13741663,
+        "nsPerOp": 72.77
       },
       "valibot": {
-        "opsPerSec": 11536236,
-        "nsPerOp": 86.68
+        "opsPerSec": 10394162,
+        "nsPerOp": 96.21
       },
       "uvld": {
-        "opsPerSec": 6883514,
-        "nsPerOp": 145.27
+        "opsPerSec": 9971686,
+        "nsPerOp": 100.28
       },
       "zod": {
-        "opsPerSec": 5991821,
-        "nsPerOp": 166.89
+        "opsPerSec": 4843672,
+        "nsPerOp": 206.45
       },
       "yup": {
-        "opsPerSec": 899807,
-        "nsPerOp": 1111.35
+        "opsPerSec": 616213,
+        "nsPerOp": 1622.81
       },
       "joi": {
-        "opsPerSec": 469095,
-        "nsPerOp": 2131.76
+        "opsPerSec": 379921,
+        "nsPerOp": 2632.12
       }
     }
   },
@@ -235,50 +235,50 @@
     "uvld": {
       "string": {
         "esbuild": {
-          "raw": 1971,
-          "gzip": 956,
-          "brotli": 857
+          "raw": 2102,
+          "gzip": 1006,
+          "brotli": 903
         },
         "rollup": {
-          "raw": 1918,
-          "gzip": 922,
-          "brotli": 805
+          "raw": 2053,
+          "gzip": 968,
+          "brotli": 854
         }
       },
       "email": {
         "esbuild": {
-          "raw": 1283,
-          "gzip": 739,
-          "brotli": 647
+          "raw": 1414,
+          "gzip": 787,
+          "brotli": 684
         },
         "rollup": {
-          "raw": 1240,
-          "gzip": 712,
-          "brotli": 615
+          "raw": 1375,
+          "gzip": 761,
+          "brotli": 651
         }
       },
       "user": {
         "esbuild": {
-          "raw": 3395,
-          "gzip": 1587,
-          "brotli": 1438
+          "raw": 3772,
+          "gzip": 1769,
+          "brotli": 1617
         },
         "rollup": {
-          "raw": 3301,
-          "gzip": 1521,
-          "brotli": 1380
+          "raw": 3694,
+          "gzip": 1701,
+          "brotli": 1542
         }
       },
       "full": {
         "esbuild": {
-          "raw": 19174,
-          "gzip": 6808,
-          "brotli": 6161
+          "raw": 19688,
+          "gzip": 7020,
+          "brotli": 6357
         },
         "rollup": {
-          "raw": 17299,
-          "gzip": 6028,
-          "brotli": 5453
+          "raw": 17842,
+          "gzip": 6225,
+          "brotli": 5629
         }
       }
     },

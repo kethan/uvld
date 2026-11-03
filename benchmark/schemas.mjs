@@ -48,7 +48,7 @@ export const LIST = Array.from({ length: 100 }, (_, i) => ({
 }));
 
 // --- uvld ------------------------------------------------------------------
-const uvldUser = () => uvld.object({
+export const uvldUser = () => uvld.object({
   name: uvld.string('', [uvld.minLength(2), uvld.maxLength(50)]),
   email: uvld.string('', [uvld.email()]),
   age: uvld.number('', [uvld.integerCheck(), uvld.min(18), uvld.max(120)]),
@@ -58,7 +58,7 @@ const uvldUser = () => uvld.object({
 const uvldCheck = schema => value => uvld.safeParse(schema, value).success;
 
 // --- zod -------------------------------------------------------------------
-const zodUser = () => z.object({
+export const zodUser = () => z.object({
   name: z.string().min(2).max(50),
   email: z.email(),
   age: z.number().int().min(18).max(120),
@@ -68,7 +68,7 @@ const zodUser = () => z.object({
 const zodCheck = schema => value => schema.safeParse(value).success;
 
 // --- valibot ---------------------------------------------------------------
-const valibotUser = () => v.object({
+export const valibotUser = () => v.object({
   name: v.pipe(v.string(), v.minLength(2), v.maxLength(50)),
   email: v.pipe(v.string(), v.email()),
   age: v.pipe(v.number(), v.integer(), v.minValue(18), v.maxValue(120)),
@@ -120,7 +120,7 @@ const EMAIL_PATTERN = '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$';
 const ajv = new Ajv({ allErrors: true, strict: false });
 // A fresh object every call: ajv caches compiled validators per schema object,
 // so reusing one literal would measure a cache hit instead of compilation.
-const ajvUserSchema = () => ({
+export const ajvUserSchema = () => ({
   type: 'object',
   required: ['name', 'email', 'age', 'tags', 'address'],
   properties: {

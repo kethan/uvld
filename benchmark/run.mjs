@@ -13,12 +13,13 @@ import { mdTable, fmtOps } from './harness.mjs';
 
 // Loaded dynamically so a missing benchmark install prints an instruction
 // instead of a raw ERR_MODULE_NOT_FOUND stack trace.
-let schemas, runtimeMod, sizeMod;
+let schemas, runtimeMod, sizeMod, compileMod;
 try {
-  [schemas, runtimeMod, sizeMod] = await Promise.all([
+  [schemas, runtimeMod, sizeMod, compileMod] = await Promise.all([
     import('./schemas.mjs'),
     import('./runtime.mjs'),
-    import('./size.mjs')
+    import('./size.mjs'),
+    import('./compile.mjs')
   ]);
 } catch (error) {
   if (error.code === 'ERR_MODULE_NOT_FOUND') {
@@ -30,6 +31,7 @@ try {
 const { LIBS, INVALID, VALID } = schemas;
 const { runRuntime, runtimeMarkdown, verify } = runtimeMod;
 const { measureSize, rawMarkdown, sizeMarkdown, writeEntries } = sizeMod;
+const { runCompile, compileMarkdown } = compileMod;
 
 const stamp = new Date().toISOString().slice(0, 10);
 const quick = process.env.BENCH_QUICK === '1';
@@ -63,11 +65,15 @@ for (const [lib, cases] of Object.entries(entryPaths)) {
 console.log('Runtime (median ops/sec, higher is better)');
 const runtime = runRuntime();
 
-// --- 3. bundle size --------------------------------------------------------
+// --- 3. compiled predicates (uvld/compile) ---------------------------------
+console.log('\nCompiled predicates (uvld/compile)');
+const compileResult = runCompile();
+
+// --- 4. bundle size --------------------------------------------------------
 console.log('\nBundle size (esbuild bundle + minify + ESM, gzip level 9)');
 const size = await measureSize();
 
-// --- 4. report -------------------------------------------------------------
+// --- 5. report -------------------------------------------------------------
 const versions = LIBS.map(lib => [lib.label, lib.version]);
 
 const byCase = Object.fromEntries(runtime.map(c => [c.id, c]));
@@ -156,6 +162,17 @@ case, so a machine that slows down mid-run affects all of them equally.
 that row.${quick ? '\n\n**Note:** this run used \`BENCH_QUICK=1\` (5 samples, shorter batches), so treat it as indicative.' : ''}
 
 ${runtimeMarkdown(runtime)}
+
+## Compiled predicates (\`uvld/compile\`)
+
+\`uvld/compile\` walks a schema once and returns a closure tree — no context
+objects, no path strings, no issue arrays on the success path. It is a separate
+opt-in entry, so the core bundle is unchanged. The same fixtures and schema
+builders are used as above; \`compile()\` takes ~${(compileResult.compileNs / 1000).toFixed(1)} µs per
+schema (one-off, versus ~0.6 µs to build the schema), and every predicate in
+this table is checked against \`is()\`/\`safeParse()\` before timing.
+
+${compileMarkdown(compileResult)}
 
 ## Bundle size
 
@@ -246,6 +263,12 @@ writeFileSync(new URL('./RESULTS.json', import.meta.url), JSON.stringify({
   },
   versions: Object.fromEntries(versions),
   correctness: checks,
+  compile: {
+    compileNsPerSchema: Math.round(compileResult.compileNs),
+    cases: Object.fromEntries(compileResult.cases.map(c => [c.id, Object.fromEntries(
+      c.rows.map(r => [r.id, { opsPerSec: Math.round(r.opsPerSec), nsPerOp: Number(r.nsPerOp.toFixed(2)) }])
+    )]))
+  },
   runtime: Object.fromEntries(runtime.map(c => [c.id, Object.fromEntries(
     c.rows.map(r => [r.id, { opsPerSec: Math.round(r.opsPerSec), nsPerOp: Number(r.nsPerOp.toFixed(2)) }])
   )])),
@@ -257,5 +280,7 @@ console.log('\nSummary (gzip, user schema):');
 console.log(
   size.map(row => `  ${row.id.padEnd(8)} esbuild ${String(row.cases.user.esbuild.gzip).padStart(6)} B   rollup ${String(row.cases.user.rollup.gzip).padStart(6)} B`).join('\n')
 );
+console.log('\nCompiled predicate (valid object, ops/sec):');
+console.log(compileResult.cases[0].rows.map(r => `  ${r.label.padEnd(26)} ${fmtOps(r.opsPerSec)}`).join('\n'));
 console.log('\nRuntime (valid object, ops/sec):');
 console.log(validCase.rows.map(r => `  ${r.label.padEnd(8)} ${fmtOps(r.opsPerSec)}`).join('\n'));

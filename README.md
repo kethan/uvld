@@ -144,6 +144,11 @@ const id = uuid('Not a UUID');
 
 Exported types: `Issue`, `Context`, `Origin`, `Validator`, `Refinement`, `RefinementResult`, `ValidationResult`, `Infer`, `InferShape`, `UnionToIntersection`, `ValidatorFactory`, `SafeParseReturn`.
 
+Optional subpath entries: `uvld/utils` (a compatibility re-export for 1.x
+imports), `uvld/async` (await-aware validators) and `uvld/compile` (a schema
+compiled once into a plain boolean predicate). None of them change the `uvld`
+entry, which stays the single import for the core and every utility.
+
 ---
 
 ## Error handling
@@ -227,6 +232,7 @@ Runnable, assert-based examples live in [`examples/`](examples/). Run them all w
 | [`transform.mjs`](examples/transform.mjs) | trimming/coercion with `transform` |
 | [`records.mjs`](examples/records.mjs) | records, symbol keys, `Map`, `Set`, nested arrays |
 | [`utils.mjs`](examples/utils.mjs) | utilities: format checks, constraints, transforms, `pipe` |
+| [`compile.mjs`](examples/compile.mjs) | `compile`/`compileParse`: one predicate, many values |
 | [`typescript.ts`](examples/typescript.ts) | static inference (compile-only) |
 
 A few compact recipes:
@@ -459,6 +465,78 @@ See [`examples/async.mjs`](examples/async.mjs) and
 
 ---
 
+## Compiled predicates — `uvld/compile`
+
+An optional entry point for the hot path: compile a schema once into a plain
+predicate, then call it as often as you like.
+
+```js
+import { object, string, number, array, min, integerCheck } from 'uvld';
+import { compile } from 'uvld/compile';
+
+const User = object({ name: string(), age: number('', [integerCheck(), min(0)]) });
+const valid = compile(User);       // (value) => boolean
+
+valid({ name: 'Ada', age: 36 });   // true
+valid({ name: 'Ada', age: -1 });   // false
+```
+
+The interpreter builds a context object, a path string and an issue array for
+every node it visits, valid or not. `compile()` walks the schema once and
+returns a closure tree with the structure unrolled instead: type checks are
+called directly, refinements run in place, and nothing is allocated on the
+success path. It is cached per schema object, so calling `compile()` twice
+returns the same function.
+
+- **It answers validity only.** `compile(schema)(value)` is `is(schema, value)`,
+  nothing more — no data, no issues, no paths. Use `is()` when you only need a
+  boolean occasionally; use `compile()` when you check the same shape in a loop
+  (HTTP body validation, row imports, event streams).
+- **Fallbacks, not forks.** Anything the compiler cannot unroll — `or`, `and`,
+  `not`, `lazy`, `transform`, `custom` and schemas of your own — delegates to
+  the generic validator for that subtree, so the answer never diverges from
+  `is()`. `optional()`/`nullable()` wrappers are compiled when they carry no
+  refinements of their own.
+- **`compileParse(schema)`** returns a `safeParse`-shaped function: the
+  predicate answers the common case, and a rejection re-runs `safeParse()` so
+  `error` is a real `VError` with the full issue list, path for path. A schema
+  that cannot be compiled at all (a root `transform()`, `or()`, `lazy()`, ...)
+  falls back to `safeParse()` entirely, so `data` is identical.
+- **Same rules as the interpreter.** Own properties only (an inherited value
+  never satisfies a key), `strict()` rejects extra keys, symbols are keys, the
+  64-level depth guard still applies (so circular data cannot blow the stack),
+  and a validator that throws counts as invalid — exactly like `safeParse()`.
+  Schema keys are captured on first use, as they are for the generic validator.
+- **Diagnostics are not the compiler's job.** A compiled subtree does not build
+  path strings, so a `custom` validator that inspects `context.path` or
+  `context.origin` sees a root context instead of its position in the tree.
+  Validity is otherwise identical; reach for `compileParse()` when you need
+  real paths, since its errors come from `safeParse()`.
+- **Costs.** `compile()` itself takes ~9.4 µs for the benchmark's five-field
+  schema (versus ~0.6 µs to build it), and the entry is 2,703 B raw / 1,131 B
+  gzip, external to the core — importers of `uvld` alone pay nothing.
+
+The [benchmark](benchmark/RESULTS.md) measures the same fixtures through the
+generic validator, the compiled predicate, zod, valibot and ajv:
+
+| validation path | valid object | invalid object | 100 objects |
+| --- | ---: | ---: | ---: |
+| uvld generic `safeParse` | 1,202 ns | 6,552 ns | 131.1 µs |
+| **uvld `compile()`** | **565 ns** | **226 ns** | **57.0 µs** |
+| uvld `compileParse()` (compiled + `safeParse` on failure) | 576 ns | 7,476 ns | — |
+| zod 4.6.7 `safeParse` | 918 ns | 3,548 ns | 89.6 µs |
+| valibot 1.5.0 `safeParse` | 975 ns | 2,142 ns | 96.6 µs |
+| ajv 8.20.0 | 155 ns | 246 ns | 12.2 µs |
+
+2.1× faster than the interpreter on valid input, ~29× on invalid input (no
+context, no `VError`), and ahead of zod and valibot on all three cases.
+`compileParse()` pays for the predicate *and* the `safeParse()` that builds the
+error, so it is a win only when most values are valid. ajv is
+still ~3.6× faster on valid input, because it generates specialised JavaScript;
+emitting code is deliberately out of scope here. Numbers are
+machine-specific — see
+[`benchmark/RESULTS.md`](benchmark/RESULTS.md) for the full run.
+
 ## Browser / CDN
 
 ```html
@@ -479,25 +557,28 @@ All shipped bundles are minified. `npm run size` enforces the budget in CI.
 
 | Bundle | Raw | gzip | brotli |
 | --- | ---: | ---: | ---: |
-| `dist/index.js` (ESM) | 19,515 B | 6,913 B | 6,227 B |
-| `dist/index.cjs` (CJS) | 19,354 B | 6,272 B | 5,704 B |
-| `dist/index.min.js` (IIFE) | 18,227 B | 6,215 B | 5,635 B |
+| `dist/index.js` (ESM) | 19,874 B | 7,043 B | 6,359 B |
+| `dist/index.cjs` (CJS) | 19,713 B | 6,391 B | 5,805 B |
+| `dist/index.min.js` (IIFE) | 18,586 B | 6,337 B | 5,759 B |
 | `dist/utils.js` (ESM, compat shim) | 73 B | 69 B | 57 B |
 | `dist/utils.cjs` (CJS, compat shim) | 316 B | 206 B | 157 B |
 | `dist/async.js` (ESM, opt-in) | 5,815 B | 1,968 B | 1,782 B |
 | `dist/async.cjs` (CJS, opt-in) | 5,856 B | 1,911 B | 1,722 B |
+| `dist/compile.js` (ESM, opt-in) | 2,703 B | 1,131 B | 1,040 B |
+| `dist/compile.cjs` (CJS, opt-in) | 2,725 B | 1,133 B | 1,050 B |
 
 `uvld` is a **single entry**: the core and all utilities live in one file, so
 there is one import and no duplication between entries. `uvld/utils` is a
-73-byte re-export kept for 1.x imports. `uvld/async` is the only other entry
-point; it imports the core as an external module and never duplicates it.
+73-byte re-export kept for 1.x imports. `uvld/async` and `uvld/compile` are the
+only other entry points; both import the core as an external module and never
+duplicate it.
 Bundlers tree-shake the named ESM exports, so you only pay for what you import
 — but CJS `require('uvld')` and the IIFE build load the whole file.
 
-- A tree-shaken one-schema import is **585 B gzip**, below the 0.0.1 minified CDN build (~1.27 kB) even though the library now does far more. The full file is larger because it carries all 157 utilities for `require` and CDN users.
+- A tree-shaken one-schema import is **598 B gzip**, below the 0.0.1 minified CDN build (~1.27 kB) even though the library now does far more. The full file is larger because it carries all 157 utilities for `require` and CDN users.
 - There are **no runtime dependencies** (0.0.1 shipped a build plugin as a runtime dep, pulling 12 legacy packages into consumer installs).
 - The published tarball is roughly the same size as before: the utilities moved into the core bundle and `uvld/utils` became a shim, so nothing is shipped twice.
-- Bundlers can tree-shake the ESM build. The core is synchronous and allocation-light with no schema compilation step; async validation lives only in the opt-in async entry.
+- Bundlers can tree-shake the ESM build. The core is synchronous and allocation-light, with no compilation step of its own; compiling a schema into a predicate is the opt-in `uvld/compile` entry, and async validation lives only in `uvld/async`.
 - A depth guard (64 levels) prevents stack overflows on circular data.
 
 **Tree-shaking works for schemas *and* utilities, with no bundler-specific
@@ -511,7 +592,7 @@ option. Measured for a real consumer:
 
 | import | Rollup (gzip) | esbuild (gzip) |
 |---|---:|---:|
-| `is(string(), 1)` | 576 B | 585 B |
+| `is(string(), 1)` | 576 B | 598 B |
 | `string` only | 486 B | 490 B |
 | `string` + `object` + `safeParse` | 949 B | 977 B |
 | `email` only (a utility) | 155 B | 165 B |
@@ -525,8 +606,8 @@ object, string, pipe` — costs 2,335 B minified / 1,072 B gzip for uvld against
 gzip level 9): that list is the one place uvld is now *larger*, because every
 utility is its own lazy factory on top of the shared `define`/`call` machinery
 while valibot composes a single flat pipe. On a real schema the order flips —
-the five-field object from the benchmark is 1,769 B gzip against valibot's
-1,891 B, and 1,701 B against 1,755 B with Rollup.
+the five-field object from the benchmark is 1,857 B gzip against valibot's
+1,891 B, and 1,782 B against 1,755 B with Rollup.
 
 Before 1.2.0 that six-name import cost **3,221 B gzip**: the separate
 `uvld/utils` bundle made module-level `fmt(...)` calls, so esbuild kept every
@@ -547,12 +628,12 @@ time anything until every library agrees on the fixtures. The
 
 | library | create schema | validate object | user schema (gzip, esbuild) | user schema (gzip, Rollup) |
 | --- | ---: | ---: | ---: | ---: |
-| uvld 1.2.0 (next) | 869 k ops/s | 821 k ops/s | **1,769 B** | **1,701 B** |
-| valibot 1.5.0 | 502 k ops/s | 1.12 M ops/s | 1,891 B | 1,755 B |
-| zod 4.6.7 | 12.8 k ops/s | 1.19 M ops/s | 93,135 B¹ | 23,638 B |
-| yup 1.7.1 | 18.2 k ops/s | 52 k ops/s | 13,639 B | 12,610 B |
-| joi 18.3.1 | 15.5 k ops/s | 146 k ops/s | 54,835 B | 53,321 B |
-| ajv 8.20.0 | 770 ops/s² | 6.04 M ops/s | 38,701 B | 37,554 B |
+| uvld 1.3.0 (next) | 513 k ops/s | 793 k ops/s | **1,857 B** | **1,782 B** |
+| valibot 1.5.0 | 385 k ops/s | 1.04 M ops/s | 1,891 B | 1,755 B |
+| zod 4.6.7 | 12 k ops/s | 1.06 M ops/s | 93,135 B¹ | 23,638 B |
+| yup 1.7.1 | 22 k ops/s | 46 k ops/s | 13,639 B | 12,610 B |
+| joi 18.3.1 | 15 k ops/s | 131 k ops/s | 54,835 B | 53,321 B |
+| ajv 8.20.0 | 1 k ops/s² | 5.72 M ops/s | 38,701 B | 37,554 B |
 
 ¹ esbuild cannot tree-shake zod 4's namespace re-export (`export { z }`), so it
 keeps every locale; Rollup drops them. Both numbers are what a consumer of that
@@ -560,7 +641,7 @@ bundler ships. ² ajv compiles the JSON Schema (~1 ms) and is measured on a fres
 schema object each time, because it caches per object.
 
 uvld builds the fastest and ships the smallest tree-shaken bundle of the six,
-and validates this object **within ~1.4× of valibot and zod** — the hot path
+and validates this object **within ~1.3× of valibot and zod** — the hot path
 builds one context per field, reuses the key list and path suffixes computed on
 first use, and skips the closure plus array per refinement that `flatMap` used
 to allocate. Rejecting the invalid object is slower (~6 µs) than valibot because

@@ -13,5 +13,6 @@ test('all runnable examples execute without errors', () => {
   expect(output).toContain('=== api ===');
   expect(output).toContain('=== errors ===');
   expect(output).toContain('=== async ===');
-  expect(output).toContain('10 examples ran successfully.');
+  expect(output).toContain('=== compile ===');
+  expect(output).toContain('11 examples ran successfully.');
 });

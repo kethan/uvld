@@ -67,6 +67,24 @@ const utils = {
   ]
 };
 
+const compileEntry = {
+  input: 'src/compile.js',
+  // The core stays external: the compiled entry only calls `is`/`safeParse`
+  // on the generic path, so it never duplicates the library.
+  external: ['./index.js'],
+  plugins: [copy('src/compile.d.ts', 'dist/compile.d.ts')],
+  output: [
+    { file: 'dist/compile.js', format: 'es', plugins: [esm] },
+    {
+      file: 'dist/compile.cjs',
+      format: 'cjs',
+      exports: 'named',
+      paths: id => id.includes('index.js') ? './index.cjs' : id,
+      plugins: [cjs]
+    }
+  ]
+};
+
 const asyncEntry = {
   input: 'src/async.js',
   external: ['./index.js'],
@@ -83,4 +101,4 @@ const asyncEntry = {
   ]
 };
 
-export default [core, utils, asyncEntry];
+export default [core, utils, asyncEntry, compileEntry];

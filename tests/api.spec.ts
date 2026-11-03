@@ -95,6 +95,7 @@ describe('API surface stays in sync', () => {
     expect(readme).toMatch(/## Use cases/i);
     expect(readme).toMatch(/uvld\/utils/);
     expect(readme).toMatch(/uvld\/async/);
+    expect(readme).toMatch(/uvld\/compile/);
   });
 
   test('the utils module still exports the full 1.x feature list', () => {
@@ -206,6 +207,22 @@ describe('package manifest', () => {
     expect(read('utils.d.ts')).toContain('./dist/utils.js');
   });
 
+  test('the ./compile subpath is fully declared and keeps the core external', () => {
+    const p = pkg();
+    const sub = p.exports['./compile'];
+    expect(Object.keys(sub)[0]).toBe('types');
+    expect(sub.types).toBe('./dist/compile.d.ts');
+    expect(sub.import).toBe('./dist/compile.js');
+    expect(sub.require).toMatch(/\.cjs$/);
+    expect(Object.keys(sub).indexOf('require')).toBeLessThan(Object.keys(sub).indexOf('default'));
+    expect(p.files).toContain('compile.d.ts');
+    expect(read('compile.d.ts')).toContain('./dist/compile.js');
+    expect(read('src/compile.js')).toContain("from './index.js'");
+    // The compiler is opt-in: it must never leak into the single entry.
+    expect(runtimeExports()).not.toContain('compile');
+    expect(read('src/index.js')).not.toMatch(/export\s*\{[^}]*\bcompile\b/);
+  });
+
   test('zero runtime dependencies, correct license, useful metadata', () => {
     const p = pkg();
     expect(p.dependencies ?? {}).toEqual({});
@@ -214,7 +231,7 @@ describe('package manifest', () => {
     expect(p.sideEffects).toBe(false);
     expect(p.files).toContain('dist');
     expect(p.engines.node).toBeTruthy();
-    expect(p.version).toBe('1.2.0');
+    expect(p.version).toBe('1.3.0');
     expect(p.keywords.length).toBeGreaterThan(3);
   });
 

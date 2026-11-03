@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 
 const repo = fileURLToPath(new URL('..', import.meta.url));
-for (const f of ['dist/index.js', 'dist/index.cjs', 'dist/index.min.js', 'dist/index.d.ts', 'dist/utils.js', 'dist/utils.cjs', 'dist/utils.d.ts', 'dist/async.js', 'dist/async.cjs', 'dist/async.d.ts']) {
+for (const f of ['dist/index.js', 'dist/index.cjs', 'dist/index.min.js', 'dist/index.d.ts', 'dist/utils.js', 'dist/utils.cjs', 'dist/utils.d.ts', 'dist/async.js', 'dist/async.cjs', 'dist/async.d.ts', 'dist/compile.js', 'dist/compile.cjs', 'dist/compile.d.ts']) {
   if (!existsSync(join(repo, f))) {
     console.error(`MISSING ${f} — run \`npm run build\` first.`);
     process.exit(1);
@@ -111,6 +111,50 @@ const core = require('uvld');
 })().catch(e => { console.error(e); process.exitCode = 1; });
 `);
 
+  writeFileSync(join(consumer, 'compile.mjs'), `
+import { compile, compileParse } from 'uvld/compile';
+import * as uvld from 'uvld';
+import { object, string, number, array, optional, or } from 'uvld';
+const User = object({ name: string(), age: number(), tags: array(string()), bio: optional(string()) });
+const valid = compile(User);
+if (valid({ name: 'Ada', age: 36, tags: ['x'] }) !== true) throw new Error('compile accepted a valid value as invalid');
+if (valid({ name: 'Ada', age: 'x', tags: [] }) !== false) throw new Error('compile accepted an invalid value');
+if ('compile' in uvld) throw new Error('compile must not be exported from the main entry');
+const parse = compileParse(User);
+const good = parse({ name: 'Ada', age: 36, tags: [] });
+if (!good.success || good.data.name !== 'Ada') throw new Error('compileParse success failed');
+const bad = parse({ name: 'Ada', age: 'x', tags: [] });
+if (bad.success || bad.error.issues[0].path !== '["age"]') throw new Error('compileParse must preserve safeParse errors');
+const union = compile(or(string(), number()));
+if (!union('x') || !union(1) || union(true)) throw new Error('fallback nodes disagree with is()');
+console.log('compile ESM import: OK');
+`);
+
+  writeFileSync(join(consumer, 'compile.cjs'), `
+const { compile, compileParse } = require('uvld/compile');
+const core = require('uvld');
+const S = core.object({ a: core.string() });
+if (compile(S)({ a: 'x' }) !== true) throw new Error('compile CJS failed');
+if (compile(S)({ a: 1 }) !== false) throw new Error('compile CJS accepted an invalid value');
+if (compileParse(S)({})?.success !== false) throw new Error('compileParse CJS failed');
+if (!require.resolve('uvld/compile').endsWith('compile.cjs')) throw new Error('compile require resolved to the wrong file');
+if ('compile' in core) throw new Error('compile leaked into the core CJS entry');
+console.log('compile CJS require: OK');
+`);
+
+  writeFileSync(join(consumer, 'compile-types.ts'), `
+import { string, number, object, array, optional, type Infer, type SafeParseReturn } from 'uvld';
+import { compile, compileParse, type Compiled, type CompiledParse } from 'uvld/compile';
+const User = object({ name: string(), age: number(), tags: array(string()), bio: optional(string()) });
+type User = Infer<typeof User>;
+const valid: Compiled<User> = compile(User);
+const parse: CompiledParse<User> = compileParse(User);
+const ok: boolean = valid({ name: 'A', age: 1, tags: [] });
+const r: SafeParseReturn<User> = parse({ name: 'A', age: 1, tags: [] });
+if (r.success) { const name: string = r.data.name; void name; }
+void [ok, parse];
+`);
+
   writeFileSync(join(consumer, 'async-types.ts'), `
 import { string } from 'uvld';
 import {
@@ -151,6 +195,8 @@ void e.issues;
   console.log(run('node', ['utils.cjs'], consumer).trim());
   console.log(run('node', ['async.mjs'], consumer).trim());
   console.log(run('node', ['async.cjs'], consumer).trim());
+  console.log(run('node', ['compile.mjs'], consumer).trim());
+  console.log(run('node', ['compile.cjs'], consumer).trim());
   const tsc = join(repo, 'node_modules', '.bin', 'tsc');
   for (const [label, args] of [
     ['node16/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'types.ts']],
@@ -166,7 +212,10 @@ void e.issues;
     ['async/node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'async-types.ts']],
     ['utils/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'utils-types.ts']],
     ['utils/bundler', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'esnext', '--moduleResolution', 'bundler', 'utils-types.ts']],
-    ['utils/node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'utils-types.ts']]
+    ['utils/node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'utils-types.ts']],
+    ['compile/nodenext', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'nodenext', '--moduleResolution', 'nodenext', 'compile-types.ts']],
+    ['compile/bundler', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'esnext', '--moduleResolution', 'bundler', 'compile-types.ts']],
+    ['compile/node10', ['--noEmit', '--strict', '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node10', 'compile-types.ts']]
   ]) {
     run(tsc, args, consumer);
     console.log(`TypeScript (${label}): OK`);
@@ -187,7 +236,8 @@ void e.issues;
     ...Object.values(pkg.exports['.']),
     ...Object.values(pkg.exports['./utils']),
     ...Object.values(pkg.exports['./async']),
-    './utils.d.ts', './async.d.ts'
+    ...Object.values(pkg.exports['./compile']),
+    './utils.d.ts', './async.d.ts', './compile.d.ts'
   ];
   for (const target of targets) {
     if (typeof target === 'string' && target.startsWith('./') &&

@@ -69,9 +69,18 @@ const define = (type, validate) => (message = '', validations = []) => {
     for (let i = 0; i < n; i++) issues.push(...call(validations[i], value, c));
     return issues;
   };
-  // What this validator checks, for the experimental compiler in compile.js.
-  // Costs one small array per schema at build time.
+  // What this validator checks, for the compiler in compile.js: the type
+  // predicate plus the refinements, never the structural walk (which needs a
+  // real context). One small array per schema at build time.
   fn.meta = [type, validate, validations];
+  return fn;
+};
+
+// Composites (object/array/tuple/record/map/set) walk their own children, so
+// the walk is kept out of `meta` and the children are published separately.
+const composite = (type, check, walk) => (message = '', validations = []) => {
+  const fn = define(type, check)(message, [walk, ...validations]);
+  fn.meta = [type, check, validations];
   return fn;
 };
 
@@ -110,14 +119,20 @@ const enums = (values, message = '', validations = []) => {
 
 // --- wrappers --------------------------------------------------------------
 // Nested issues are preserved; only an explicit message overrides them.
-const wrap = (schema, message, validations, skip) => (value, c = ROOT) => {
-  if (skip(value)) return [];
-  let issues = call(schema, value, c);
-  if (validations.length) {
-    issues = [...issues];
-    for (let i = 0; i < validations.length; i++) push(issues, call(validations[i], value, c));
-  }
-  return message ? issues.map(i => ({ ...i, message })) : issues;
+const wrap = (schema, message, validations, skip) => {
+  const fn = (value, c = ROOT) => {
+    if (skip(value)) return [];
+    let issues = call(schema, value, c);
+    if (validations.length) {
+      issues = [...issues];
+      for (let i = 0; i < validations.length; i++) push(issues, call(validations[i], value, c));
+    }
+    return message ? issues.map(i => ({ ...i, message })) : issues;
+  };
+  fn.inner = schema;
+  fn.skip = skip;
+  fn.refinements = validations;
+  return fn;
 };
 const optional = (schema, message = '', validations = []) => wrap(schema, message, validations, v => v === undefined);
 const nullable = (schema, message = '', validations = []) => wrap(schema, message, validations, v => v === null);
@@ -146,16 +161,25 @@ const pairs = (keySchema, valueSchema, value, c, isMap) => {
 };
 
 const array = (schema, message = '', validations = []) => {
-  const fn = define('array', Array.isArray)(message, [(value, c) => items(schema, value, c), ...validations]);
+  const fn = composite('array', Array.isArray, (value, c) => items(schema, value, c))(message, validations);
   fn.item = schema;
   return fn;
 };
-const set = (schema, message = '', validations = []) =>
-  define('set', v => typeOf(v) === 'set')(message, [(value, c) => items(schema, value, c), ...validations]);
-const record = (keySchema, valueSchema, message = '', validations = []) =>
-  define('record', v => typeOf(v) === 'object')(message, [(value, c) => pairs(keySchema, valueSchema, value, c, false), ...validations]);
-const map = (keySchema, valueSchema, message = '', validations = []) =>
-  define('map', v => typeOf(v) === 'map')(message, [(value, c) => pairs(keySchema, valueSchema, value, c, true), ...validations]);
+const set = (schema, message = '', validations = []) => {
+  const fn = composite('set', v => typeOf(v) === 'set', (value, c) => items(schema, value, c))(message, validations);
+  fn.item = schema;
+  return fn;
+};
+const record = (keySchema, valueSchema, message = '', validations = []) => {
+  const fn = composite('record', v => typeOf(v) === 'object', (value, c) => pairs(keySchema, valueSchema, value, c, false))(message, validations);
+  fn.entries = [keySchema, valueSchema];
+  return fn;
+};
+const map = (keySchema, valueSchema, message = '', validations = []) => {
+  const fn = composite('map', v => typeOf(v) === 'map', (value, c) => pairs(keySchema, valueSchema, value, c, true))(message, validations);
+  fn.entries = [keySchema, valueSchema];
+  return fn;
+};
 
 // Plain objects only; own properties only (the prototype chain cannot satisfy
 // a key); symbol keys are supported; extra keys reported together with field
@@ -173,39 +197,36 @@ const object = (schema, message = '', validations = [], exact = false) => {
       fns = keys.map(k => schema[k]);
     }
   };
-  const fn = define('object', v => typeOf(v) === 'object')(message, [
-    (value, c) => {
-      prep();
-      const issues = [];
-      if (exact) {
-        const extra = Reflect.ownKeys(value).filter(k => !keys.includes(k));
-        if (extra.length) issues.push(issue(`Extra keys: ${extra.map(String).join(', ')}`, 'object', value, { ...c, origin: 'key' }));
-      }
-      for (let i = 0; i < keys.length; i++) {
-        push(issues, call(fns[i], Object.hasOwn(value, keys[i]) ? value[keys[i]] : undefined, {
-          path: c.path + suffixes[i], origin: 'value', depth: c.depth + 1, out: c.out
-        }));
-      }
-      return issues;
-    },
-    ...validations
-  ]);
+  const fn = composite('object', v => typeOf(v) === 'object', (value, c) => {
+    prep();
+    const issues = [];
+    if (exact) {
+      const extra = Reflect.ownKeys(value).filter(k => !keys.includes(k));
+      if (extra.length) issues.push(issue(`Extra keys: ${extra.map(String).join(', ')}`, 'object', value, { ...c, origin: 'key' }));
+    }
+    for (let i = 0; i < keys.length; i++) {
+      push(issues, call(fns[i], Object.hasOwn(value, keys[i]) ? value[keys[i]] : undefined, {
+        path: c.path + suffixes[i], origin: 'value', depth: c.depth + 1, out: c.out
+      }));
+    }
+    return issues;
+  })(message, validations);
   fn.shape = () => (prep(), [keys, fns]);
   fn.exact = exact;
   return fn;
 };
 const strict = (schema, message = '', validations = []) => object(schema, message, validations, true);
 
-const tuple = (schemas, message = '', validations = []) =>
-  define('tuple', Array.isArray)(message, [
-    (value, c) => {
-      if (value.length !== schemas.length) return [issue(`Tuple length ${schemas.length} != ${value.length}`, 'tuple', value, c)];
-      const issues = [];
-      for (let i = 0; i < schemas.length; i++) push(issues, call(schemas[i], value[i], seg(c, i, 'value')));
-      return issues;
-    },
-    ...validations
-  ]);
+const tuple = (schemas, message = '', validations = []) => {
+  const fn = composite('tuple', Array.isArray, (value, c) => {
+    if (value.length !== schemas.length) return [issue(`Tuple length ${schemas.length} != ${value.length}`, 'tuple', value, c)];
+    const issues = [];
+    for (let i = 0; i < schemas.length; i++) push(issues, call(schemas[i], value[i], seg(c, i, 'value')));
+    return issues;
+  })(message, validations);
+  fn.items = schemas;
+  return fn;
+};
 
 // --- constraints -----------------------------------------------------------
 const size = v => {

@@ -1,6 +1,6 @@
 {
   "name": "uvld",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Tiny, zero-dependency schema validation for JavaScript and TypeScript",
   "type": "module",
   "source": "./src/index.js",
@@ -29,13 +29,20 @@
       "import": "./dist/async.js",
       "require": "./dist/async.cjs",
       "default": "./dist/async.js"
+    },
+    "./compile": {
+      "types": "./dist/compile.d.ts",
+      "import": "./dist/compile.js",
+      "require": "./dist/compile.cjs",
+      "default": "./dist/compile.js"
     }
   },
   "files": [
     "dist",
     "LICENSE",
     "utils.d.ts",
-    "async.d.ts"
+    "async.d.ts",
+    "compile.d.ts"
   ],
   "sideEffects": false,
   "engines": {

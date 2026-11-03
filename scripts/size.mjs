@@ -12,14 +12,19 @@ const BUDGET = {
   // which CJS and IIFE consumers load in full.
   // Raised for the 1.3.0 hot-path rework: +~540 B raw / +~200 B gzip buys a
   // ~3.6x faster object validation (see benchmark/RESULTS.md).
-  // Raised again by ~130 B raw / ~65 B gzip for the schema metadata the
-  // compile() spike reads (src/compile.js, not exported yet).
-  'dist/index.js': { raw: 19800, gzip: 7030, brotli: 6350 },
-  'dist/index.cjs': { raw: 19650, gzip: 6390, brotli: 5800 },
-  'dist/index.min.js': { raw: 18500, gzip: 6330, brotli: 5770 },
+  // Raised again by ~130 B raw / ~65 B gzip for the schema metadata that
+  // `uvld/compile` reads (`composite()` publishes the shape, item and entries
+  // of the structural nodes; `function` metadata without the walk).
+  'dist/index.js': { raw: 20100, gzip: 7090, brotli: 6400 },
+  'dist/index.cjs': { raw: 19900, gzip: 6430, brotli: 5850 },
+  'dist/index.min.js': { raw: 18750, gzip: 6380, brotli: 5800 },
   // legacy `uvld/utils` subpath — a re-export shim, not a second copy
   'dist/utils.js': { raw: 300, gzip: 200, brotli: 180 },
   'dist/utils.cjs': { raw: 600, gzip: 350, brotli: 300 },
+  // optional compile entry (`uvld/compile`): closure compiler over the schema
+  // metadata; the core stays external, so this is the compiler only.
+  'dist/compile.js': { raw: 2800, gzip: 1180, brotli: 1080 },
+  'dist/compile.cjs': { raw: 2800, gzip: 1180, brotli: 1080 },
   // optional async entry point
   'dist/async.js': { raw: 6200, gzip: 2100, brotli: 1900 },
   'dist/async.cjs': { raw: 6250, gzip: 2050, brotli: 1850 }

@@ -535,6 +535,34 @@ all 195 exports (~6.0 kB gzip); if that matters, import the ESM build.
 `sideEffects: false` is declared, so a consumer that never imports `uvld` pays
 nothing at all.
 
+### Against other libraries
+
+[`benchmark/`](benchmark) runs the same schema through uvld, zod, valibot, yup,
+joi and ajv — runtime throughput plus consumer bundle size — and refuses to
+time anything until every library agrees on the fixtures. The
+[checked-in run](benchmark/RESULTS.md) (2026-11-03) on one typical API payload:
+
+| library | create schema | validate object | user schema (gzip, esbuild) | user schema (gzip, Rollup) |
+| --- | ---: | ---: | ---: | ---: |
+| uvld 1.2.0 | 1.80 M ops/s | 320 k ops/s | **1,587 B** | **1,521 B** |
+| valibot 1.5.0 | 898 k ops/s | 1.36 M ops/s | 1,891 B | 1,755 B |
+| zod 4.6.7 | 18.5 k ops/s | 1.50 M ops/s | 93,135 B¹ | 23,638 B |
+| yup 1.7.1 | 28.7 k ops/s | 68 k ops/s | 13,639 B | 12,610 B |
+| joi 18.3.1 | 20.9 k ops/s | 180 k ops/s | 54,835 B | 53,321 B |
+| ajv 8.20.0 | 905 ops/s² | 6.64 M ops/s | 38,701 B | 37,554 B |
+
+¹ esbuild cannot tree-shake zod 4's namespace re-export (`export { z }`), so it
+keeps every locale; Rollup drops them. Both numbers are what a consumer of that
+bundler ships. ² ajv compiles the JSON Schema (~1 ms) and is measured on a fresh
+schema object each time, because it caches per object.
+
+The trade is visible: uvld builds the fastest and ships the smallest tree-shaken
+bundle of the six, but validates this object **~4.7× slower than zod and ~4.3×
+slower than valibot**. The difference is in the sync hot path — a context object
+and a path string per field, plus a `Reflect.ownKeys()` per validation — not in
+the design. That makes it the obvious next optimisation target; run
+`npm run bench:install && npm run bench` to reproduce.
+
 ---
 
 ## Migration from 0.0.1
@@ -566,7 +594,9 @@ npm run examples     # run all 10 runnable examples
 npm run build        # ESM + CJS + IIFE bundles and dist/index.d.ts
 npm run size         # enforce the byte budget
 npm run smoke        # pack + install into a clean consumer; ESM/CJS/TS/IIFE checks
-npm run check        # all of the above in order
+npm run bench:install  # comparison libraries for benchmark/ (once)
+npm run bench        # uvld vs zod, valibot, yup, joi, ajv -> benchmark/RESULTS.md
+npm run check        # all of the above except bench, in order
 ```
 
 CI runs on Node 20 and 22 and also performs `npm audit --audit-level=moderate` (currently 0 advisories). See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution checklist and [SECURITY.md](SECURITY.md) for vulnerability reporting.

@@ -49,6 +49,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "examples": "node examples/run-all.mjs",
+    "bench": "node benchmark/run.mjs",
+    "bench:install": "npm --prefix benchmark install --no-audit --no-fund",
     "check": "npm run typecheck && npm run test && npm run examples && npm run build && npm run size && npm run smoke",
     "prepack": "npm run build"
   },

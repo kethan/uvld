@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`benchmark/`** — a reproducible comparison against zod, valibot, yup, joi
+  and ajv on one schema: runtime throughput (schema creation, valid/invalid
+  object, 100-item array, string, email) and consumer bundle size (esbuild and
+  Rollup, gzip/brotli), with a correctness gate that refuses to time anything
+  until all six libraries agree on the fixtures. `npm run bench:install &&
+  npm run bench` writes `benchmark/RESULTS.md` and `RESULTS.json`. The
+  checked-in run has uvld fastest to build the schema and smallest for the
+  tree-shaken import, but ~4.8× slower than zod on object validation.
+
 ## 1.2.0 (2026-11-02)
 
 Every synchronous validator now ships from the single `uvld` entry point.

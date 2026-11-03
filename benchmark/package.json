@@ -1,0 +1,27 @@
+{
+  "name": "uvld-benchmark",
+  "private": true,
+  "type": "module",
+  "description": "Runtime and bundle-size comparison: uvld vs zod, valibot, yup, joi and ajv",
+  "scripts": {
+    "bench": "node run.mjs",
+    "runtime": "node runtime.mjs",
+    "size": "node size.mjs"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "29.0.0",
+    "@rollup/plugin-json": "6.1.0",
+    "@rollup/plugin-node-resolve": "16.0.1",
+    "@rollup/plugin-terser": "1.0.2",
+    "ajv": "8.20.0",
+    "esbuild": "0.28.2",
+    "joi": "18.3.1",
+    "rollup": "4.65.0",
+    "valibot": "1.5.0",
+    "yup": "1.7.1",
+    "zod": "4.6.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

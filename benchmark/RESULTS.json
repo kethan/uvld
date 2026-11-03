@@ -1,0 +1,536 @@
+{
+  "generatedAt": "2026-11-03T01:58:38.137Z",
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "linux",
+    "release": "6.1.158+",
+    "arch": "x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "cores": 2,
+    "quick": false
+  },
+  "versions": {
+    "uvld": "1.2.0",
+    "zod": "4.6.7",
+    "valibot": "1.5.0",
+    "yup": "1.7.1",
+    "joi": "18.3.1",
+    "ajv": "8.20.0"
+  },
+  "correctness": [
+    {
+      "id": "uvld",
+      "valid": true,
+      "invalid": true,
+      "list": true,
+      "listInvalid": true,
+      "string": true,
+      "email": true
+    },
+    {
+      "id": "zod",
+      "valid": true,
+      "invalid": true,
+      "list": true,
+      "listInvalid": true,
+      "string": true,
+      "email": true
+    },
+    {
+      "id": "valibot",
+      "valid": true,
+      "invalid": true,
+      "list": true,
+      "listInvalid": true,
+      "string": true,
+      "email": true
+    },
+    {
+      "id": "yup",
+      "valid": true,
+      "invalid": true,
+      "list": true,
+      "listInvalid": true,
+      "string": true,
+      "email": true
+    },
+    {
+      "id": "joi",
+      "valid": true,
+      "invalid": true,
+      "list": true,
+      "listInvalid": true,
+      "string": true,
+      "email": true
+    },
+    {
+      "id": "ajv",
+      "valid": true,
+      "invalid": true,
+      "list": true,
+      "listInvalid": true,
+      "string": true,
+      "email": true
+    }
+  ],
+  "runtime": {
+    "create": {
+      "uvld": {
+        "opsPerSec": 1803229,
+        "nsPerOp": 554.56
+      },
+      "valibot": {
+        "opsPerSec": 898141,
+        "nsPerOp": 1113.41
+      },
+      "yup": {
+        "opsPerSec": 28730,
+        "nsPerOp": 34806.28
+      },
+      "joi": {
+        "opsPerSec": 20944,
+        "nsPerOp": 47745.88
+      },
+      "zod": {
+        "opsPerSec": 18538,
+        "nsPerOp": 53942.48
+      },
+      "ajv": {
+        "opsPerSec": 905,
+        "nsPerOp": 1105321.88
+      }
+    },
+    "valid": {
+      "ajv": {
+        "opsPerSec": 6635413,
+        "nsPerOp": 150.71
+      },
+      "zod": {
+        "opsPerSec": 1496133,
+        "nsPerOp": 668.39
+      },
+      "valibot": {
+        "opsPerSec": 1363382,
+        "nsPerOp": 733.47
+      },
+      "uvld": {
+        "opsPerSec": 319869,
+        "nsPerOp": 3126.28
+      },
+      "joi": {
+        "opsPerSec": 179723,
+        "nsPerOp": 5564.11
+      },
+      "yup": {
+        "opsPerSec": 68149,
+        "nsPerOp": 14673.81
+      }
+    },
+    "invalid": {
+      "ajv": {
+        "opsPerSec": 5194514,
+        "nsPerOp": 192.51
+      },
+      "valibot": {
+        "opsPerSec": 788437,
+        "nsPerOp": 1268.33
+      },
+      "zod": {
+        "opsPerSec": 406028,
+        "nsPerOp": 2462.88
+      },
+      "joi": {
+        "opsPerSec": 161012,
+        "nsPerOp": 6210.73
+      },
+      "uvld": {
+        "opsPerSec": 118838,
+        "nsPerOp": 8414.84
+      },
+      "yup": {
+        "opsPerSec": 13403,
+        "nsPerOp": 74609.9
+      }
+    },
+    "list": {
+      "ajv": {
+        "opsPerSec": 85021,
+        "nsPerOp": 11761.75
+      },
+      "zod": {
+        "opsPerSec": 15362,
+        "nsPerOp": 65095.66
+      },
+      "valibot": {
+        "opsPerSec": 12596,
+        "nsPerOp": 79389.62
+      },
+      "uvld": {
+        "opsPerSec": 3261,
+        "nsPerOp": 306664.5
+      },
+      "joi": {
+        "opsPerSec": 1930,
+        "nsPerOp": 518233.08
+      },
+      "yup": {
+        "opsPerSec": 650,
+        "nsPerOp": 1537905
+      }
+    },
+    "string": {
+      "ajv": {
+        "opsPerSec": 33373190,
+        "nsPerOp": 29.96
+      },
+      "valibot": {
+        "opsPerSec": 21130895,
+        "nsPerOp": 47.32
+      },
+      "uvld": {
+        "opsPerSec": 10724322,
+        "nsPerOp": 93.25
+      },
+      "zod": {
+        "opsPerSec": 8919953,
+        "nsPerOp": 112.11
+      },
+      "joi": {
+        "opsPerSec": 1952137,
+        "nsPerOp": 512.26
+      },
+      "yup": {
+        "opsPerSec": 994959,
+        "nsPerOp": 1005.07
+      }
+    },
+    "email": {
+      "ajv": {
+        "opsPerSec": 14242431,
+        "nsPerOp": 70.21
+      },
+      "valibot": {
+        "opsPerSec": 11536236,
+        "nsPerOp": 86.68
+      },
+      "uvld": {
+        "opsPerSec": 6883514,
+        "nsPerOp": 145.27
+      },
+      "zod": {
+        "opsPerSec": 5991821,
+        "nsPerOp": 166.89
+      },
+      "yup": {
+        "opsPerSec": 899807,
+        "nsPerOp": 1111.35
+      },
+      "joi": {
+        "opsPerSec": 469095,
+        "nsPerOp": 2131.76
+      }
+    }
+  },
+  "size": {
+    "uvld": {
+      "string": {
+        "esbuild": {
+          "raw": 1971,
+          "gzip": 956,
+          "brotli": 857
+        },
+        "rollup": {
+          "raw": 1918,
+          "gzip": 922,
+          "brotli": 805
+        }
+      },
+      "email": {
+        "esbuild": {
+          "raw": 1283,
+          "gzip": 739,
+          "brotli": 647
+        },
+        "rollup": {
+          "raw": 1240,
+          "gzip": 712,
+          "brotli": 615
+        }
+      },
+      "user": {
+        "esbuild": {
+          "raw": 3395,
+          "gzip": 1587,
+          "brotli": 1438
+        },
+        "rollup": {
+          "raw": 3301,
+          "gzip": 1521,
+          "brotli": 1380
+        }
+      },
+      "full": {
+        "esbuild": {
+          "raw": 19174,
+          "gzip": 6808,
+          "brotli": 6161
+        },
+        "rollup": {
+          "raw": 17299,
+          "gzip": 6028,
+          "brotli": 5453
+        }
+      }
+    },
+    "zod": {
+      "string": {
+        "esbuild": {
+          "raw": 453967,
+          "gzip": 92962,
+          "brotli": 76582
+        },
+        "rollup": {
+          "raw": 65950,
+          "gzip": 18491,
+          "brotli": 16585
+        }
+      },
+      "email": {
+        "esbuild": {
+          "raw": 453969,
+          "gzip": 92968,
+          "brotli": 76608
+        },
+        "rollup": {
+          "raw": 53948,
+          "gzip": 15857,
+          "brotli": 14290
+        }
+      },
+      "user": {
+        "esbuild": {
+          "raw": 454255,
+          "gzip": 93135,
+          "brotli": 76749
+        },
+        "rollup": {
+          "raw": 84578,
+          "gzip": 23638,
+          "brotli": 21011
+        }
+      },
+      "full": {
+        "esbuild": {
+          "raw": 458129,
+          "gzip": 93026,
+          "brotli": 76594
+        },
+        "rollup": {
+          "raw": 383033,
+          "gzip": 88134,
+          "brotli": 71924
+        }
+      }
+    },
+    "valibot": {
+      "string": {
+        "esbuild": {
+          "raw": 2108,
+          "gzip": 959,
+          "brotli": 867
+        },
+        "rollup": {
+          "raw": 1848,
+          "gzip": 867,
+          "brotli": 781
+        }
+      },
+      "email": {
+        "esbuild": {
+          "raw": 2153,
+          "gzip": 994,
+          "brotli": 900
+        },
+        "rollup": {
+          "raw": 1828,
+          "gzip": 880,
+          "brotli": 779
+        }
+      },
+      "user": {
+        "esbuild": {
+          "raw": 5674,
+          "gzip": 1891,
+          "brotli": 1695
+        },
+        "rollup": {
+          "raw": 5418,
+          "gzip": 1755,
+          "brotli": 1583
+        }
+      },
+      "full": {
+        "esbuild": {
+          "raw": 85142,
+          "gzip": 15434,
+          "brotli": 13408
+        },
+        "rollup": {
+          "raw": 83176,
+          "gzip": 13364,
+          "brotli": 11579
+        }
+      }
+    },
+    "yup": {
+      "string": {
+        "esbuild": {
+          "raw": 42203,
+          "gzip": 13487,
+          "brotli": 12183
+        },
+        "rollup": {
+          "raw": 27504,
+          "gzip": 9245,
+          "brotli": 8377
+        }
+      },
+      "email": {
+        "esbuild": {
+          "raw": 42214,
+          "gzip": 13493,
+          "brotli": 12250
+        },
+        "rollup": {
+          "raw": 27515,
+          "gzip": 9253,
+          "brotli": 8388
+        }
+      },
+      "user": {
+        "esbuild": {
+          "raw": 42526,
+          "gzip": 13639,
+          "brotli": 12327
+        },
+        "rollup": {
+          "raw": 39641,
+          "gzip": 12610,
+          "brotli": 11404
+        }
+      },
+      "full": {
+        "esbuild": {
+          "raw": 44763,
+          "gzip": 14116,
+          "brotli": 12761
+        },
+        "rollup": {
+          "raw": 44052,
+          "gzip": 13524,
+          "brotli": 12215
+        }
+      }
+    },
+    "joi": {
+      "string": {
+        "esbuild": {
+          "raw": 173647,
+          "gzip": 54611,
+          "brotli": 48021
+        },
+        "rollup": {
+          "raw": 174199,
+          "gzip": 53122,
+          "brotli": 45901
+        }
+      },
+      "email": {
+        "esbuild": {
+          "raw": 173658,
+          "gzip": 54624,
+          "brotli": 48016
+        },
+        "rollup": {
+          "raw": 174210,
+          "gzip": 53134,
+          "brotli": 45924
+        }
+      },
+      "user": {
+        "esbuild": {
+          "raw": 174081,
+          "gzip": 54835,
+          "brotli": 48241
+        },
+        "rollup": {
+          "raw": 174566,
+          "gzip": 53321,
+          "brotli": 46034
+        }
+      },
+      "full": {
+        "esbuild": {
+          "raw": 173543,
+          "gzip": 54516,
+          "brotli": 47993
+        },
+        "rollup": {
+          "raw": 174094,
+          "gzip": 53037,
+          "brotli": 45820
+        }
+      }
+    },
+    "ajv": {
+      "string": {
+        "esbuild": {
+          "raw": 124665,
+          "gzip": 38492,
+          "brotli": 34044
+        },
+        "rollup": {
+          "raw": 123218,
+          "gzip": 37354,
+          "brotli": 32852
+        }
+      },
+      "email": {
+        "esbuild": {
+          "raw": 124704,
+          "gzip": 38517,
+          "brotli": 34077
+        },
+        "rollup": {
+          "raw": 123257,
+          "gzip": 37380,
+          "brotli": 32805
+        }
+      },
+      "user": {
+        "esbuild": {
+          "raw": 125164,
+          "gzip": 38701,
+          "brotli": 34205
+        },
+        "rollup": {
+          "raw": 123711,
+          "gzip": 37554,
+          "brotli": 32957
+        }
+      },
+      "full": {
+        "esbuild": {
+          "raw": 124565,
+          "gzip": 38432,
+          "brotli": 33964
+        },
+        "rollup": {
+          "raw": 123121,
+          "gzip": 37297,
+          "brotli": 32760
+        }
+      }
+    }
+  }
+}

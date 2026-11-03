@@ -11,7 +11,14 @@ All three are built as separate entry points that import the core externally. Bo
 ```bash
 npm ci
 npm run check        # typecheck + tests + examples + build + size + smoke
+npm run bench:install  # once: the comparison libraries for benchmark/
+npm run bench        # uvld vs zod, valibot, yup, joi, ajv -> benchmark/RESULTS.md
 ```
+
+`benchmark/` is not part of `npm run check` — it installs its own dependencies
+and takes a couple of minutes. It gates itself on correctness (every library
+must agree on the fixtures) before timing anything, so re-run it after touching
+the parse path and keep `benchmark/RESULTS.md` in sync with the committed code.
 
 Use `npm run test:watch` while developing.
 

@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased (1.3.0)
+
+### Added
+
+- **`uvld/compile`** — an opt-in entry point that walks a schema once and
+  returns a plain boolean predicate with the structure unrolled: no context
+  objects, no path strings and no issue arrays on the success path.
+  `compile(schema)` is `is(schema, value)` as a closure tree, cached per schema
+  object; `compileParse(schema)` returns a `safeParse`-shaped function that
+  re-runs `safeParse()` on rejection so the `VError` and its issues are
+  preserved. Nodes it cannot unroll (`or`, `and`, `not`, `lazy`, `transform`,
+  `custom`, user-defined kinds) delegate to the generic validator, so it never
+  disagrees with `is()`. It keeps the interpreter's rules: own properties only,
+  `strict()` extra-key rejection, symbol keys, the 64-level depth guard, and
+  "a throw means invalid". Shipped as ESM + CJS with declarations and the same
+  legacy `node10` shim as the other subpaths; the core stays external.
+- **`benchmark/compile.mjs`** — compiled predicates measured on the same
+  fixtures and schema builders as the main benchmark, against the generic
+  validator, zod, valibot and ajv, with a correctness gate that refuses to time
+  anything until the predicate agrees with `is()`/`safeParse()`. `run.mjs` now
+  writes the section into `RESULTS.md`/`RESULTS.json`.
+- **`benchmark/`** — a reproducible comparison against zod, valibot, yup, joi
+  and ajv on one schema: runtime throughput (schema creation, valid/invalid
+  object, 100-item array, string, email) and consumer bundle size (esbuild and
+  Rollup, gzip/brotli), with a correctness gate that refuses to time anything
+  until all six libraries agree on the fixtures. `npm run bench:install &&
+  npm run bench` writes `benchmark/RESULTS.md` and `RESULTS.json`. The
+  checked-in run has uvld fastest to build the schema and smallest for the
+  tree-shaken import, within ~1.4× of zod and valibot on object validation.
+
+### Performance
+
+- **`compile()` validates the benchmark object in 565 ns instead of 1,202 ns**
+  (2.1×; a 100-item array goes 131 µs → 57 µs) and rejects an invalid object in
+  226 ns instead of 6,552 ns (~29×), since no context or `VError` is built.
+  `compile()` itself costs ~9.4 µs per schema, one-off. The core entry is
+  unchanged in behaviour and API; the opt-in entry is 2,703 B raw / 1,131 B
+  gzip with the core external.
+- **Schema metadata for the compiler costs ~130 B raw / ~65 B gzip** in the
+  core bundle: structural nodes (`object`, `array`, `set`, `tuple`, `record`,
+  `map`) publish their shape/item/entries through an internal `composite()`
+  helper that keeps the structural walk out of the published metadata. Schema
+  creation is ~12% slower (1.07 µs → 1.19 µs for the five-field schema) and
+  object validation is unchanged.
+- **Object validation is ~3.6× faster** (4.1 µs → 1.1 µs for the benchmark's
+  five-field payload; a 100-item array goes 411 µs → 104 µs). Schema creation
+  and bundle size are unchanged in character: `object()` now computes its key
+  list and bracket-quoted path suffixes once, on first use, instead of calling
+  `Reflect.ownKeys()` and `JSON.stringify()` for every key on every validation;
+  `define()`, `items()`, `pairs()`, `tuple()`, `wrap()` and `and()` loop instead
+  of `flatMap()`, which removes a callback closure and an array per refinement;
+  and child contexts are built as plain literals instead of a spread.
+- **Costs ~540 B raw / ~200 B gzip** in the full bundle (`dist/index.js`
+  18,973 → 19,515 B raw, 6,706 → 6,913 B gzip), and ~45 B gzip on the smallest
+  tree-shaken import (`is(string(), 1)`: 517 → 585 B gzip). The byte budgets
+  were raised accordingly. Schema objects are read once, on first use, so keys
+  added to the schema object afterwards are no longer picked up.
+- **`safeParse` on invalid input is still dominated by `new VError`** (~3.3 µs
+  of the ~6 µs), which valibot avoids by returning a plain object. `is()` skips
+  error construction entirely when only a boolean is needed.
+
 ## 1.2.0 (2026-11-02)
 
 Every synchronous validator now ships from the single `uvld` entry point.

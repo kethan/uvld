@@ -7,8 +7,8 @@
 // transformed output.
 
 // `out` is a shared mutable box (not module-level state), so a root transform
-// can publish its result without racing an await. `seg()` spreads `c`, so
-// every child sees the very same box. evaluate() copies it per call.
+// can publish its result without racing an await. Child contexts are new
+// objects that point at the very same box. evaluate() makes one per call.
 const ROOT = { path: '', origin: 'value', depth: 0, out: { set: false, value: undefined } };
 
 // Precise, cross-realm type names: null, array, date, map, set, promise, ...
@@ -16,13 +16,23 @@ const typeOf = v => v === null ? 'null'
   : typeof v !== 'object' ? typeof v
     : Object.prototype.toString.call(v).slice(8, -1).toLowerCase();
 
+// JSON.stringify is only needed for keys with characters that must be escaped;
+// plain keys take the fast path (stringifying every key on every validation
+// showed up as the object hot path).
+const quoted = k => /["\\\u0000-\u001f\ud800-\udfff]/.test(k) ? JSON.stringify(k) : '"' + k + '"';
+
 // Bracket-quoted segments: a key containing dots can never look like a path.
 const seg = (c, key, origin) => ({
-  ...c,
-  path: c.path + '[' + (typeof key === 'number' ? key : JSON.stringify(String(key))) + ']',
+  path: c.path + '[' + (typeof key === 'number' ? key : quoted(String(key))) + ']',
   origin,
-  depth: c.depth + 1
+  depth: c.depth + 1,
+  out: c.out
 });
+
+// Concat in place: avoids the callback closure and one array per element that
+// flatMap() allocates. `from` is always one validator's issues, never the
+// growing accumulator, so the spread stays small.
+const push = (into, from) => into.push(...from);
 
 const issue = (message, expected, value, c) => ({
   message,
@@ -47,10 +57,31 @@ const call = (s, value, c) => {
 
 // Uniform signature for the whole API:
 //   factory(message?: string, validations?: Validator[]): Validator
-const define = (type, validate) => (message = '', validations = []) => (value, c = ROOT) => {
-  if (c.depth > 64) return [issue('Too deep', type, value, c)];
-  if (!validate(value, c)) return [issue(message || `Expected ${type}, got ${typeOf(value)}`, type, value, c)];
-  return validations.flatMap(v => call(v, value, c));
+const define = (type, validate) => (message = '', validations = []) => {
+  const fn = (value, c = ROOT) => {
+    if (c.depth > 64) return [issue('Too deep', type, value, c)];
+    if (!validate(value, c)) return [issue(message || `Expected ${type}, got ${typeOf(value)}`, type, value, c)];
+    // Most validators carry zero or one refinement; looping skips the closure
+    // and the arrays flatMap() would allocate on every single validation.
+    const n = validations.length;
+    if (n < 2) return n ? call(validations[0], value, c) : [];
+    const issues = [];
+    for (let i = 0; i < n; i++) issues.push(...call(validations[i], value, c));
+    return issues;
+  };
+  // What this validator checks, for the compiler in compile.js: the type
+  // predicate plus the refinements, never the structural walk (which needs a
+  // real context). One small array per schema at build time.
+  fn.meta = [type, validate, validations];
+  return fn;
+};
+
+// Composites (object/array/tuple/record/map/set) walk their own children, so
+// the walk is kept out of `meta` and the children are published separately.
+const composite = (type, check, walk) => (message = '', validations = []) => {
+  const fn = define(type, check)(message, [walk, ...validations]);
+  fn.meta = [type, check, validations];
+  return fn;
 };
 
 // --- primitives -----------------------------------------------------------
@@ -88,10 +119,20 @@ const enums = (values, message = '', validations = []) => {
 
 // --- wrappers --------------------------------------------------------------
 // Nested issues are preserved; only an explicit message overrides them.
-const wrap = (schema, message, validations, skip) => (value, c = ROOT) => {
-  if (skip(value)) return [];
-  const issues = [call(schema, value, c), ...validations.map(v => call(v, value, c))].flat();
-  return message ? issues.map(i => ({ ...i, message })) : issues;
+const wrap = (schema, message, validations, skip) => {
+  const fn = (value, c = ROOT) => {
+    if (skip(value)) return [];
+    let issues = call(schema, value, c);
+    if (validations.length) {
+      issues = [...issues];
+      for (let i = 0; i < validations.length; i++) push(issues, call(validations[i], value, c));
+    }
+    return message ? issues.map(i => ({ ...i, message })) : issues;
+  };
+  fn.inner = schema;
+  fn.skip = skip;
+  fn.refinements = validations;
+  return fn;
 };
 const optional = (schema, message = '', validations = []) => wrap(schema, message, validations, v => v === undefined);
 const nullable = (schema, message = '', validations = []) => wrap(schema, message, validations, v => v === null);
@@ -100,55 +141,92 @@ const custom = (validate, message = 'Invalid value', validations = []) =>
   define('custom', (v, c) => validate(v, c))(message, validations);
 
 // --- composites ------------------------------------------------------------
-const items = (schema, value, c) =>
-  [...value].flatMap((item, i) => call(schema, item, seg(c, i, 'value')));
+const items = (schema, value, c) => {
+  const issues = [];
+  let i = 0;
+  for (const item of value) push(issues, call(schema, item, seg(c, i++, 'value')));
+  return issues;
+};
 
 // Shared by record (own keys, incl. symbols) and map (entries).
-const pairs = (keySchema, valueSchema, value, c, isMap) =>
-  (isMap ? [...value] : Reflect.ownKeys(value).map(k => [k, value[k]]))
-    .flatMap(([k, v], i) => {
-      const at = isMap ? i : k;
-      return [
-        ...call(keySchema, k, seg(c, at, 'key')),
-        ...call(valueSchema, v, seg(c, at, 'value'))
-      ];
-    });
+const pairs = (keySchema, valueSchema, value, c, isMap) => {
+  const issues = [];
+  let i = 0;
+  for (const k of isMap ? value : Reflect.ownKeys(value)) {
+    const at = isMap ? i++ : k;
+    push(issues, call(keySchema, isMap ? k[0] : k, seg(c, at, 'key')));
+    push(issues, call(valueSchema, isMap ? k[1] : value[k], seg(c, at, 'value')));
+  }
+  return issues;
+};
 
-const array = (schema, message = '', validations = []) =>
-  define('array', Array.isArray)(message, [(value, c) => items(schema, value, c), ...validations]);
-const set = (schema, message = '', validations = []) =>
-  define('set', v => typeOf(v) === 'set')(message, [(value, c) => items(schema, value, c), ...validations]);
-const record = (keySchema, valueSchema, message = '', validations = []) =>
-  define('record', v => typeOf(v) === 'object')(message, [(value, c) => pairs(keySchema, valueSchema, value, c, false), ...validations]);
-const map = (keySchema, valueSchema, message = '', validations = []) =>
-  define('map', v => typeOf(v) === 'map')(message, [(value, c) => pairs(keySchema, valueSchema, value, c, true), ...validations]);
+const array = (schema, message = '', validations = []) => {
+  const fn = composite('array', Array.isArray, (value, c) => items(schema, value, c))(message, validations);
+  fn.item = schema;
+  return fn;
+};
+const set = (schema, message = '', validations = []) => {
+  const fn = composite('set', v => typeOf(v) === 'set', (value, c) => items(schema, value, c))(message, validations);
+  fn.item = schema;
+  return fn;
+};
+const record = (keySchema, valueSchema, message = '', validations = []) => {
+  const fn = composite('record', v => typeOf(v) === 'object', (value, c) => pairs(keySchema, valueSchema, value, c, false))(message, validations);
+  fn.entries = [keySchema, valueSchema];
+  return fn;
+};
+const map = (keySchema, valueSchema, message = '', validations = []) => {
+  const fn = composite('map', v => typeOf(v) === 'map', (value, c) => pairs(keySchema, valueSchema, value, c, true))(message, validations);
+  fn.entries = [keySchema, valueSchema];
+  return fn;
+};
 
 // Plain objects only; own properties only (the prototype chain cannot satisfy
 // a key); symbol keys are supported; extra keys reported together with field
 // errors instead of short-circuiting.
-const object = (schema, message = '', validations = [], exact = false) =>
-  define('object', v => typeOf(v) === 'object')(message, [
-    (value, c) => {
-      const keys = Reflect.ownKeys(schema);
-      const extra = exact ? Reflect.ownKeys(value).filter(k => !keys.includes(k)) : [];
-      return [
-        ...(extra.length
-          ? [issue(`Extra keys: ${extra.map(String).join(', ')}`, 'object', value, { ...c, origin: 'key' })]
-          : []),
-        ...keys.flatMap(k => call(schema[k], Object.hasOwn(value, k) ? value[k] : undefined, seg(c, k, 'value')))
-      ];
-    },
-    ...validations
-  ]);
+// Keys and their path suffixes are computed once, the first time the schema is
+// used: running Reflect.ownKeys() and stringifying every key on *every*
+// validation was the largest single cost in object validation, but doing it in
+// the factory made schema creation measurably slower.
+const object = (schema, message = '', validations = [], exact = false) => {
+  let keys, fns, suffixes;
+  const prep = () => {
+    if (!keys) {
+      keys = Reflect.ownKeys(schema);
+      suffixes = keys.map(k => '[' + quoted(String(k)) + ']');
+      fns = keys.map(k => schema[k]);
+    }
+  };
+  const fn = composite('object', v => typeOf(v) === 'object', (value, c) => {
+    prep();
+    const issues = [];
+    if (exact) {
+      const extra = Reflect.ownKeys(value).filter(k => !keys.includes(k));
+      if (extra.length) issues.push(issue(`Extra keys: ${extra.map(String).join(', ')}`, 'object', value, { ...c, origin: 'key' }));
+    }
+    for (let i = 0; i < keys.length; i++) {
+      push(issues, call(fns[i], Object.hasOwn(value, keys[i]) ? value[keys[i]] : undefined, {
+        path: c.path + suffixes[i], origin: 'value', depth: c.depth + 1, out: c.out
+      }));
+    }
+    return issues;
+  })(message, validations);
+  fn.shape = () => (prep(), [keys, fns]);
+  fn.exact = exact;
+  return fn;
+};
 const strict = (schema, message = '', validations = []) => object(schema, message, validations, true);
 
-const tuple = (schemas, message = '', validations = []) =>
-  define('tuple', Array.isArray)(message, [
-    (value, c) => value.length !== schemas.length
-      ? [issue(`Tuple length ${schemas.length} != ${value.length}`, 'tuple', value, c)]
-      : schemas.flatMap((s, i) => call(s, value[i], seg(c, i, 'value'))),
-    ...validations
-  ]);
+const tuple = (schemas, message = '', validations = []) => {
+  const fn = composite('tuple', Array.isArray, (value, c) => {
+    if (value.length !== schemas.length) return [issue(`Tuple length ${schemas.length} != ${value.length}`, 'tuple', value, c)];
+    const issues = [];
+    for (let i = 0; i < schemas.length; i++) push(issues, call(schemas[i], value[i], seg(c, i, 'value')));
+    return issues;
+  })(message, validations);
+  fn.items = schemas;
+  return fn;
+};
 
 // --- constraints -----------------------------------------------------------
 const size = v => {
@@ -174,7 +252,11 @@ const or = (...schemas) => (value, c = ROOT) => {
   }
   return schemas.length ? errors : [issue('No schemas', 'or', value, c)];
 };
-const and = (...schemas) => (value, c = ROOT) => schemas.flatMap(s => call(s, value, c));
+const and = (...schemas) => (value, c = ROOT) => {
+  const issues = [];
+  for (let i = 0; i < schemas.length; i++) push(issues, call(schemas[i], value, c));
+  return issues;
+};
 
 const not = (schema, message = '', validations = []) =>
   define('not', (v, c) => call(schema, v, c).length > 0)(message, validations);
@@ -204,7 +286,7 @@ class VError extends Error {
 // Single evaluation path for is/parse/safeParse. Unexpected throws from user
 // validators become an issue, so `safeParse` is genuinely safe.
 const evaluate = (schema, value) => {
-  const ctx = { ...ROOT, out: { set: false, value: undefined } };
+  const ctx = { path: '', origin: 'value', depth: 0, out: { set: false, value: undefined } };
   try {
     const issues = call(schema, value, ctx);
     return { issues, data: ctx.out.set ? ctx.out.value : value };

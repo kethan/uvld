@@ -10,6 +10,7 @@ import { run as transform } from './transform.mjs';
 import { run as records } from './records.mjs';
 import { run as utils } from './utils.mjs';
 import { run as asyncExample } from './async.mjs';
+import { run as compileExample } from './compile.mjs';
 
 const examples = [
   ['quickstart', quickstart],
@@ -21,7 +22,8 @@ const examples = [
   ['transform', transform],
   ['records', records],
   ['utils', utils],
-  ['async', asyncExample]
+  ['async', asyncExample],
+  ['compile', compileExample]
 ];
 
 for (const [name, run] of examples) {

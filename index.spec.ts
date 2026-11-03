@@ -239,6 +239,18 @@ describe('composites', () => {
     ok(object({}), Object.create(null));
   });
 
+  test('object: the key list is captured on first use', () => {
+    // Trade-off of the hot-path rework: keys and path suffixes are computed
+    // once, on first validation, instead of on every call. Build the shape
+    // with its final keys, or use `custom()` for dynamic rules.
+    const shape: Record<string, Validator> = { a: string() };
+    const schema = object(shape);
+    ok(schema, { a: 'x' });          // first use captures `a`
+    shape.b = string();
+    ok(schema, { a: 'x', b: 1 });    // `b` is not re-scanned, so 1 is not checked
+    fail(object(shape), { a: 'x', b: 1 }); // a schema built now does check it
+  });
+
   test('object: prototype chain cannot satisfy a required key', () => {
     (Object.prototype as any).injected = 'from prototype';
     try {
